@@ -11,9 +11,21 @@ let package = Package(
         .library(name: "TopOffEngine", targets: ["TopOffEngine"]),
         .library(name: "TopOffPresentation", targets: ["TopOffPresentation"])
     ],
+    dependencies: [
+        .package(
+            url: "https://github.com/AmrElsehemy/gametime-ios.git",
+            revision: "2a53177f914a5cf95ff89d4f6992770f53405009"
+        )
+    ],
     targets: [
         .target(name: "TopOffEngine"),
-        .target(name: "TopOffPresentation", dependencies: ["TopOffEngine"]),
+        .target(
+            name: "TopOffPresentation",
+            dependencies: [
+                "TopOffEngine",
+                .product(name: "GameTimeExperience", package: "gametime-ios")
+            ]
+        ),
         .testTarget(name: "TopOffEngineTests", dependencies: ["TopOffEngine"])
     ]
 )
