@@ -1,14 +1,24 @@
 import SpriteKit
 import TopOffEngine
+import GameTimeExperience
 
 @MainActor
 public final class TopOffScene: SKScene {
     private var game: Game
     private var selectedIndex: Int?
     private var containerNodes: [Int: SKNode] = [:]
+    private let feedback: GameFeedbackController
 
-    public init(level: TopOffLevel = TopOffLevels.handcrafted[0], size: CGSize = CGSize(width: 390, height: 844)) {
+    public init(
+        level: TopOffLevel = TopOffLevels.handcrafted[0],
+        size: CGSize = CGSize(width: 390, height: 844),
+        feedback: GameFeedbackController = GameFeedbackController(
+            audio: NoOpAudioController(),
+            haptics: NoOpHapticsController()
+        )
+    ) {
         self.game = Game(board: level.board)
+        self.feedback = feedback
         super.init(size: size)
         scaleMode = .resizeFill
         backgroundColor = SKColor(white: 0.07, alpha: 1)
@@ -31,6 +41,7 @@ public final class TopOffScene: SKScene {
 
     public func undo() {
         guard game.undo() != nil else { return }
+        feedback.play(.undo, soundEnabled: true, hapticsEnabled: true)
         selectedIndex = nil
         renderBoard(animated: true)
     }
@@ -59,12 +70,15 @@ public final class TopOffScene: SKScene {
 
         do {
             try game.pour(Move(from: selectedIndex, to: tapped))
+            feedback.play(.pour, soundEnabled: true, hapticsEnabled: true)
             self.selectedIndex = nil
             renderBoard(animated: true)
             if game.isSolved {
+                feedback.play(.solve, soundEnabled: true, hapticsEnabled: true)
                 celebrate()
             }
         } catch {
+            feedback.play(.invalidMove, soundEnabled: true, hapticsEnabled: true)
             invalidFeedback(on: tapped)
         }
     }
