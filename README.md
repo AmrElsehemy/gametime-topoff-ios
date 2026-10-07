@@ -10,9 +10,10 @@ This repository owns everything specific to Top Off. Shared platform code lives 
 
 ## Status
 
-- `TopOffEngine`: pure-Swift rules engine (containers, pours, undo, solved detection) with unit tests. No UI, no dependencies.
-- iOS app target: not created yet (see below).
-- Level generator and solver, SpriteKit scene, monetization wiring: not started.
+- `TopOffEngine`: pure-Swift rules engine (containers, pours, undo, solved detection) with unit tests.
+- First 5 handcrafted levels are committed with reference solutions and regression tests.
+- iOS app target / SpriteKit scene: next milestone; the rules core is ready to embed.
+- Seeded generator + solver and monetization wiring follow only after the 5-level tactile prototype is playable.
 
 See [`docs/PRD.md`](docs/PRD.md), including the GameTimeKit reuse table.
 

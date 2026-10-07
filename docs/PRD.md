@@ -1,6 +1,6 @@
 # Game #002 — Top Off
 
-> **Status:** Draft. Canonical PRD for Game #002; the pointer in `gametime-ios/docs/GAME_002_TOP_OFF_PRD.md` refers here.
+> **Status:** Active. Canonical PRD for Game #002. The rules engine and first five handcrafted levels are complete; the next hard gate is a tactile five-level iPhone prototype.
 > **Mechanic:** Stack/container family (see `gametime-ios/docs/GAME_MECHANIC_TAXONOMY.md`). Game #001 (Exactly One) is a constraint puzzle, so there is no mechanic overlap.
 > **Gate:** Per `gametime-ios/docs/DECISIONS.md`, Game #001 submission stays the priority. #002 must not displace anything #001 needs, including App Review follow-ups.
 
@@ -96,8 +96,8 @@ At the end of the build, record for each row: **reused as-is / reused with chang
 
 ## Milestones (proposed, adjust to the 50-day roadmap)
 
-1. **Engine:** `TopOffEngine` plus unit tests (rules, undo, solved) in the game repo, no UI.
-2. **Playable:** SpriteKit scene, one-tap interaction, tutorial level, feedback hooked to `GameFeedbackController`.
+1. **Engine — COMPLETE:** `TopOffEngine` plus unit tests (rules, undo, solved) and five handcrafted levels with executable reference solutions.
+2. **Playable — NEXT GATE:** SpriteKit scene, one-tap interaction, all five handcrafted levels, bottle lift/pour/settle animation, invalid-move feedback, solve celebration, and feedback hooked to `GameFeedbackController`. Do not start large-scale generation work until this is playable on iPhone.
 3. **Generator and solver:** seeded, solver-verified levels, difficulty curve.
 4. **Monetization:** rewarded hint and extra container via `MonetizationCoordinator`, persistent receipts, remove-ads.
 5. **Polish and ops:** accessibility pass, Game Center, diagnostics, TestFlight.
@@ -105,7 +105,7 @@ At the end of the build, record for each row: **reused as-is / reused with chang
 
 ## Open questions
 
-- Confirm the mechanic family against Game #001's actual mechanic, so overlap is minimal.
+- Mechanic family is frozen as **stack / container** for Game #002; the earlier path-engine idea is superseded for #002 and remains available for a future title.
 - App Store name and trademark check for "Top Off", and bundle ID `topoff`.
 - Rewarded "extra container": a new `MonetizationPlacement` or a variant of `rewardedContinue`?
 - Which ad network, and is it already integrated for #001?

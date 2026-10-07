@@ -103,4 +103,19 @@ final class TopOffEngineTests: XCTestCase {
         XCTAssertFalse(game.isSolved)
         XCTAssertEqual(game.moveCount, 0)
     }
+
+    func testHandcraftedLevelsHaveStableIdsAndAllSolve() throws {
+        let levels = TopOffLevels.handcrafted
+        XCTAssertEqual(levels.map(\.id), [1, 2, 3, 4, 5])
+
+        for level in levels {
+            var game = Game(board: level.board)
+            XCTAssertFalse(game.isSolved, "Level \(level.id) should start unsolved")
+            for move in level.solution {
+                try game.pour(move)
+            }
+            XCTAssertTrue(game.isSolved, "Level \(level.id) reference solution should solve the board")
+        }
+    }
+
 }
