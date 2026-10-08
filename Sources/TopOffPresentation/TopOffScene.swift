@@ -393,6 +393,7 @@ public final class TopOffScene: SKScene {
             )
             addChild(bottle)
             addChild(makeShadow(under: home, bottle: bottle))
+            if column == 0 { addShelf(row: row, y: home.y - bottle.bodyHeight / 2 - 8) }
 
             bottles.append(bottle)
             homes.append(home)
@@ -415,6 +416,17 @@ public final class TopOffScene: SKScene {
                 ]))
             }
         }
+    }
+
+    private func addShelf(row: Int, y: CGFloat) {
+        let shelf = SKShapeNode(
+            rect: CGRect(x: 20, y: y - 3, width: size.width - 40, height: 6),
+            cornerRadius: 3
+        )
+        shelf.fillColor = SKColor(white: 1, alpha: 0.07)
+        shelf.strokeColor = .clear
+        shelf.zPosition = 0
+        addChild(shelf)
     }
 
     private func makeShadow(under home: CGPoint, bottle: BottleNode) -> SKNode {

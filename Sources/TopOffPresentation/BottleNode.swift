@@ -64,6 +64,25 @@ final class BottleNode: SKNode {
         crop.addChild(liquidRoot)
         addChild(crop)
 
+        // Cylindrical shading over the liquid: dark edges, bright core, so flat colour reads as volume.
+        if let texture = Self.shadingTexture() {
+            let shading = SKSpriteNode(texture: texture, size: CGSize(width: bodyWidth, height: bodyHeight))
+            shading.zPosition = 8
+            crop.addChild(shading)
+        }
+
+        // Thick rim so the opening reads as glass, not a line.
+        let neckHalf = bodyWidth * 0.32
+        let rim = SKShapeNode(
+            rect: CGRect(x: -neckHalf - 3, y: bodyHeight / 2 - 5, width: neckHalf * 2 + 6, height: 7),
+            cornerRadius: 3.5
+        )
+        rim.fillColor = SKColor(white: 1, alpha: 0.16)
+        rim.strokeColor = SKColor(white: 1, alpha: 0.6)
+        rim.lineWidth = 1.5
+        rim.zPosition = 11
+        addChild(rim)
+
         surface.zPosition = 5
         liquidRoot.addChild(surface)
 
@@ -185,6 +204,30 @@ final class BottleNode: SKNode {
                 .scale(to: 1, duration: 0.14)
             ]))
         }
+    }
+
+    private static func shadingTexture() -> SKTexture? {
+        let space = CGColorSpaceCreateDeviceRGB()
+        guard
+            let context = CGContext(
+                data: nil, width: 64, height: 4, bitsPerComponent: 8, bytesPerRow: 0,
+                space: space, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            ),
+            let gradient = CGGradient(
+                colorsSpace: space,
+                colors: [
+                    CGColor(red: 0, green: 0, blue: 0, alpha: 0.38),
+                    CGColor(red: 1, green: 1, blue: 1, alpha: 0.16),
+                    CGColor(red: 1, green: 1, blue: 1, alpha: 0.0),
+                    CGColor(red: 0, green: 0, blue: 0, alpha: 0.32)
+                ] as CFArray,
+                locations: [0, 0.28, 0.6, 1]
+            )
+        else { return nil }
+        context.drawLinearGradient(
+            gradient, start: .zero, end: CGPoint(x: 64, y: 0), options: []
+        )
+        return context.makeImage().map { SKTexture(cgImage: $0) }
     }
 
     private static func bottlePath(width w: CGFloat, height h: CGFloat) -> CGPath {
