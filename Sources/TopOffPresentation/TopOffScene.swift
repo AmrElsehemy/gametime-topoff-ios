@@ -40,9 +40,14 @@ public final class TopOffScene: SKScene {
         }
     }
 
-    public var onSolved: (() -> Void)?
+    public var soundEnabled = true
+    public var hapticsEnabled = true
+
+    /// Called once the level is solved, with the number of pours used.
+    public var onSolved: ((_ moves: Int) -> Void)?
     /// Reports move count and undo availability whenever either changes.
-    public var onStateChange: ((_ moves: Int, _ canUndo: Bool) -> Void)?
+    public var onStateChange: ((_ moves: Int, _ canUndo: Bool, _ canAddBottle: Bool) -> Void)?
+    private var extraBottleUsed = false
 
     #if DEBUG
     private var autoplayMoves: [Move] = []
@@ -56,7 +61,7 @@ public final class TopOffScene: SKScene {
     #endif
 
     private func notifyState() {
-        onStateChange?(game.moveCount, game.canUndo)
+        onStateChange?(game.moveCount, game.canUndo, !extraBottleUsed && !didSolve)
     }
 
     public init(
@@ -94,6 +99,7 @@ public final class TopOffScene: SKScene {
         selectedIndex = nil
         queuedTap = nil
         didSolve = false
+        extraBottleUsed = false
         activePour = nil
         buildBoard(animated: true)
         notifyState()
@@ -101,7 +107,7 @@ public final class TopOffScene: SKScene {
 
     public func undo() {
         guard activePour == nil, game.undo() != nil else { return }
-        feedback.play(.undo, soundEnabled: true, hapticsEnabled: true)
+        feedback.play(.undo, soundEnabled: soundEnabled, hapticsEnabled: hapticsEnabled)
         deselectImmediately()
         refreshBottles(animated: true)
         notifyState()
@@ -109,9 +115,15 @@ public final class TopOffScene: SKScene {
 
     public func restart() {
         guard activePour == nil else { return }
+        let hadExtra = extraBottleUsed
         game.restart()
+        extraBottleUsed = false
         deselectImmediately()
-        refreshBottles(animated: true)
+        if hadExtra {
+            buildBoard(animated: false)
+        } else {
+            refreshBottles(animated: true)
+        }
         notifyState()
     }
 
@@ -139,7 +151,7 @@ public final class TopOffScene: SKScene {
         guard let from = selectedIndex else {
             guard !game.board.containers[tapped].isEmpty else {
                 invalidFeedback(on: tapped)
-                feedback.play(.invalidMove, soundEnabled: true, hapticsEnabled: true)
+                feedback.play(.invalidMove, soundEnabled: soundEnabled, hapticsEnabled: hapticsEnabled)
                 return
             }
             select(tapped)
@@ -156,7 +168,7 @@ public final class TopOffScene: SKScene {
             startPour(pour)
             notifyState()
         } catch {
-            feedback.play(.invalidMove, soundEnabled: true, hapticsEnabled: true)
+            feedback.play(.invalidMove, soundEnabled: soundEnabled, hapticsEnabled: hapticsEnabled)
             invalidFeedback(on: tapped)
         }
     }
@@ -164,7 +176,7 @@ public final class TopOffScene: SKScene {
     private func select(_ index: Int) {
         clearSelection()
         selectedIndex = index
-        feedback.play(.placement, soundEnabled: true, hapticsEnabled: true)
+        feedback.play(.placement, soundEnabled: soundEnabled, hapticsEnabled: hapticsEnabled)
         let bottle = bottles[index]
         bottle.setHighlighted(true)
         bottle.removeAction(forKey: "lift")
@@ -202,6 +214,58 @@ public final class TopOffScene: SKScene {
             .moveTo(x: x, duration: 0.04)
         ])
         bottle.run(shake, withKey: "invalid")
+    }
+
+    // MARK: - Boosters
+
+    /// Highlights the next move of a shortest solution from the current position.
+    /// Returns false if there is nothing to suggest (solved, mid-pour, or no solution from here).
+    @discardableResult
+    public func showHint() -> Bool {
+        guard activePour == nil, !didSolve else { return false }
+        guard let move = Solver.solve(game.board, stateLimit: 400_000)?.first else { return false }
+
+        clearSelection()
+        feedback.play(.hint, soundEnabled: soundEnabled, hapticsEnabled: hapticsEnabled)
+        let source = bottles[move.from]
+        let target = bottles[move.to]
+        source.setHighlighted(true)
+        target.setHighlighted(true)
+
+        for bottle in [source, target] {
+            bottle.removeAction(forKey: "hint")
+            bottle.run(.sequence([
+                .scale(to: 1.06, duration: 0.18),
+                .scale(to: 1, duration: 0.18),
+                .scale(to: 1.06, duration: 0.18),
+                .scale(to: 1, duration: 0.18),
+                .wait(forDuration: 0.8),
+                .run { bottle.setHighlighted(false) }
+            ]), withKey: "hint")
+        }
+        return true
+    }
+
+    /// Adds one spare empty bottle for this attempt. Returns false if already used.
+    @discardableResult
+    public func addExtraBottle() -> Bool {
+        guard activePour == nil, !didSolve, !extraBottleUsed else { return false }
+        extraBottleUsed = true
+        game.addExtraContainer()
+        deselectImmediately()
+        buildBoard(animated: false)
+        // Pop the new bottle in so the change is obvious.
+        if let bottle = bottles.last {
+            bottle.setScale(0.2)
+            bottle.alpha = 0
+            bottle.run(.group([
+                .fadeIn(withDuration: 0.15),
+                .scale(to: 1, duration: 0.25)
+            ]))
+        }
+        feedback.play(.placement, soundEnabled: soundEnabled, hapticsEnabled: hapticsEnabled)
+        notifyState()
+        return true
     }
 
     // MARK: - Pouring
@@ -310,7 +374,7 @@ public final class TopOffScene: SKScene {
 
         if progress > 0, !animation.didStartFlowing {
             animation.didStartFlowing = true
-            feedback.play(.pour, soundEnabled: true, hapticsEnabled: true)
+            feedback.play(.pour, soundEnabled: soundEnabled, hapticsEnabled: hapticsEnabled)
         }
 
         source.position = position
@@ -420,11 +484,14 @@ public final class TopOffScene: SKScene {
         if game.isSolved {
             didSolve = true
             queuedTap = nil
-            feedback.play(.solve, soundEnabled: true, hapticsEnabled: true)
+            feedback.play(.solve, soundEnabled: soundEnabled, hapticsEnabled: hapticsEnabled)
             celebrate()
             run(.sequence([
                 .wait(forDuration: 1.25),
-                .run { [weak self] in self?.onSolved?() }
+                .run { [weak self] in
+                    guard let self else { return }
+                    self.onSolved?(self.game.moveCount)
+                }
             ]))
             return
         }
@@ -457,9 +524,9 @@ public final class TopOffScene: SKScene {
         guard animated, activePour == nil else { return }
         // A solve has its own fanfare, so the smaller cues only play mid-level.
         if completedNow, !game.isSolved {
-            feedback.play(.milestone, soundEnabled: true, hapticsEnabled: true)
+            feedback.play(.milestone, soundEnabled: soundEnabled, hapticsEnabled: hapticsEnabled)
         } else if revealed {
-            feedback.play(.hint, soundEnabled: true, hapticsEnabled: true)
+            feedback.play(.hint, soundEnabled: soundEnabled, hapticsEnabled: hapticsEnabled)
         }
     }
 
@@ -482,7 +549,7 @@ public final class TopOffScene: SKScene {
         // Keep the board clear of the HUD above and the home indicator below, shrinking bottles
         // on tall boards instead of letting them run underneath the controls.
         let topInset: CGFloat = 175
-        let bottomInset: CGFloat = 70
+        let bottomInset: CGFloat = 135
         let availableHeight = size.height - topInset - bottomInset
         let heightPerWidth = maxCapacity * 0.8 + 0.56
         let widthForHeight = (availableHeight - CGFloat(rows - 1) * rowGap) / (CGFloat(rows) * heightPerWidth)

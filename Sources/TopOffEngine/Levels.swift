@@ -10,6 +10,23 @@ public struct TopOffLevel: Equatable, Sendable {
     }
 }
 
+extension TopOffLevel {
+    /// Whether any bottle starts with concealed layers.
+    public var hasHiddenLayers: Bool {
+        board.containers.contains { $0.hiddenLayers > 0 }
+    }
+
+    /// 1 to 3 stars from how close the move count is to the shortest solution. Concealed levels
+    /// allow more slack because the player cannot see what they are pouring onto.
+    public func stars(forMoves moves: Int) -> Int {
+        let par = Double(max(solution.count, 1))
+        let slack = hasHiddenLayers ? 1.6 : 1.25
+        if Double(moves) <= (par * slack).rounded(.up) { return 3 }
+        if Double(moves) <= (par * (slack + 0.6)).rounded(.up) { return 2 }
+        return 1
+    }
+}
+
 public enum TopOffLevels {
     private static let red = LiquidColor(1)
     private static let blue = LiquidColor(2)

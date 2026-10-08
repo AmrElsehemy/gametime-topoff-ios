@@ -180,4 +180,24 @@ final class TopOffEngineTests: XCTestCase {
         ])
         XCTAssertEqual(try? board.validate(Move(from: 0, to: 1)), 1)
     }
+
+    func testStarsScaleWithMovesOverPar() {
+        let level = TopOffLevels.campaign[4]   // fully visible, so par is the true shortest
+        let par = level.solution.count
+        XCTAssertEqual(level.stars(forMoves: par), 3)
+        XCTAssertEqual(level.stars(forMoves: par * 3), 1)
+        XCTAssertGreaterThanOrEqual(level.stars(forMoves: par + par / 2 + 1), 1)
+        XCTAssertLessThanOrEqual(level.stars(forMoves: par + par / 2 + 1), 2)
+    }
+
+    func testExtraContainerKeepsHistoryAndRestartRemovesIt() throws {
+        var game = Game(board: TopOffLevels.handcrafted[0].board)
+        let before = game.board.containers.count
+        try game.pour(Move(from: 0, to: 2))
+        game.addExtraContainer()
+        XCTAssertEqual(game.board.containers.count, before + 1)
+        XCTAssertNotNil(game.undo(), "Undo still works after adding a bottle")
+        game.restart()
+        XCTAssertEqual(game.board.containers.count, before)
+    }
 }

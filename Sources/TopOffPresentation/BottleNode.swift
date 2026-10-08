@@ -224,6 +224,8 @@ final class BottleNode: SKNode {
             node.color = run.concealed ? TopOffPalette.concealed : TopOffPalette.color(for: run.color)
             questionMarks[index].isHidden = !run.concealed
             symbolMarks[index].text = TopOffPalette.symbol(for: run.color)
+            // The filled circle glyph renders much larger than the others.
+            symbolMarks[index].fontSize = unit * (run.color.id % 6 == 1 ? 0.3 : 0.42)
             symbolMarks[index].isHidden = run.concealed || !symbolsVisible
             symbolMarks[index].position = CGPoint(x: 0, y: extra + run.height / 2)
             questionMarks[index].position = CGPoint(x: 0, y: extra + run.height / 2)
