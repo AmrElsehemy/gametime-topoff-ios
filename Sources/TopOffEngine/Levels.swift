@@ -43,62 +43,58 @@ public enum TopOffLevels {
                 Move(from: 2, to: 1),
                 Move(from: 2, to: 3)
             ]
-        ),
-        TopOffLevel(
-            id: 3,
-            board: Board(containers: [
-                Container(capacity: 3, layers: [red, blue, green]),
-                Container(capacity: 3, layers: [green, red, blue]),
-                Container(capacity: 3, layers: [blue, green, red]),
-                Container(capacity: 3),
-                Container(capacity: 3)
-            ]),
-            solution: [
-                Move(from: 0, to: 3),
-                Move(from: 1, to: 0),
-                Move(from: 2, to: 1),
-                Move(from: 2, to: 3),
-                Move(from: 0, to: 2),
-                Move(from: 1, to: 0),
-                Move(from: 1, to: 3)
-            ]
-        ),
-        TopOffLevel(
-            id: 4,
-            board: Board(containers: [
-                Container(capacity: 3, layers: [red, blue, red]),
-                Container(capacity: 3, layers: [blue, green, green]),
-                Container(capacity: 3, layers: [green, blue, red]),
-                Container(capacity: 3),
-                Container(capacity: 3)
-            ]),
-            solution: [
-                Move(from: 0, to: 3),
-                Move(from: 2, to: 3),
-                Move(from: 2, to: 0),
-                Move(from: 1, to: 2),
-                Move(from: 0, to: 1),
-                Move(from: 0, to: 3)
-            ]
-        ),
-        TopOffLevel(
-            id: 5,
-            board: Board(containers: [
-                Container(capacity: 3, layers: [red, blue, green]),
-                Container(capacity: 3, layers: [blue, green, red]),
-                Container(capacity: 3, layers: [green, red, blue]),
-                Container(capacity: 3),
-                Container(capacity: 3)
-            ]),
-            solution: [
-                Move(from: 0, to: 3),
-                Move(from: 2, to: 0),
-                Move(from: 1, to: 2),
-                Move(from: 1, to: 3),
-                Move(from: 0, to: 1),
-                Move(from: 2, to: 0),
-                Move(from: 2, to: 3)
-            ]
         )
     ]
+
+    private struct GeneratedSpec {
+        let seed: UInt64
+        let colors: Int
+        let capacity: Int
+        let empties: Int
+        /// Top layers of each bottle that start visible. nil means everything is visible.
+        var visibleLayers: Int?
+
+        init(seed: UInt64, colors: Int, capacity: Int, empties: Int, visibleLayers: Int? = nil) {
+            self.seed = seed
+            self.colors = colors
+            self.capacity = capacity
+            self.empties = empties
+            self.visibleLayers = visibleLayers
+        }
+    }
+
+    /// Seeds were picked offline with `Solver` for a steady difficulty ramp; see `testCampaignRamp`.
+    /// Comments give the shortest solution length. Levels with `visibleLayers` introduce
+    /// concealed layers, which are revealed once everything above them is poured away.
+    private static let generated: [GeneratedSpec] = [
+        GeneratedSpec(seed: 1, colors: 3, capacity: 3, empties: 2),                     // 3: 7
+        GeneratedSpec(seed: 2, colors: 4, capacity: 3, empties: 2),                     // 4: 9
+        GeneratedSpec(seed: 2, colors: 4, capacity: 4, empties: 2),                     // 5: 14
+        GeneratedSpec(seed: 1, colors: 3, capacity: 3, empties: 2, visibleLayers: 2),   // 6: 7, first mystery
+        GeneratedSpec(seed: 1, colors: 5, capacity: 4, empties: 2),                     // 7: 16
+        GeneratedSpec(seed: 1, colors: 4, capacity: 4, empties: 2, visibleLayers: 2),   // 8: 12
+        GeneratedSpec(seed: 8, colors: 5, capacity: 4, empties: 1),                     // 9: 17, one spare bottle
+        GeneratedSpec(seed: 2, colors: 5, capacity: 4, empties: 2, visibleLayers: 2),   // 10: 15
+        GeneratedSpec(seed: 29, colors: 6, capacity: 4, empties: 2),                    // 11: 20
+        GeneratedSpec(seed: 4, colors: 6, capacity: 4, empties: 2, visibleLayers: 1)    // 12: 21, only tops visible
+    ]
+
+    /// The full ramp: two handcrafted teaching levels, then solver-verified generated levels.
+    public static let campaign: [TopOffLevel] = {
+        var levels = handcrafted
+        for spec in generated {
+            let board = LevelGenerator.board(
+                seed: spec.seed,
+                colors: spec.colors,
+                capacity: spec.capacity,
+                empties: spec.empties,
+                visibleLayers: spec.visibleLayers
+            )
+            guard let solution = Solver.solve(board) else {
+                preconditionFailure("Generated level with seed \(spec.seed) is unsolvable")
+            }
+            levels.append(TopOffLevel(id: levels.count + 1, board: board, solution: solution))
+        }
+        return levels
+    }()
 }
