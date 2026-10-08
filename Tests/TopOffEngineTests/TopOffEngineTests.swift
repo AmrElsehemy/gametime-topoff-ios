@@ -106,7 +106,7 @@ final class TopOffEngineTests: XCTestCase {
 
     func testHandcraftedLevelsHaveStableIdsAndAllSolve() throws {
         let levels = TopOffLevels.handcrafted
-        XCTAssertEqual(levels.map(\.id), [1, 2, 3, 4, 5])
+        XCTAssertEqual(levels.map(\.id), [1, 2])
 
         for level in levels {
             var game = Game(board: level.board)
@@ -116,6 +116,34 @@ final class TopOffEngineTests: XCTestCase {
             }
             XCTAssertTrue(game.isSolved, "Level \(level.id) reference solution should solve the board")
         }
+    }
+
+    func testCampaignRamp() throws {
+        let levels = TopOffLevels.campaign
+        XCTAssertEqual(levels.map(\.id), Array(1...levels.count))
+
+        var previousLength = 0
+        for level in levels {
+            var game = Game(board: level.board)
+            XCTAssertFalse(game.isSolved, "Level \(level.id) should start unsolved")
+            for move in level.solution { try game.pour(move) }
+            XCTAssertTrue(game.isSolved, "Level \(level.id) solution should solve the board")
+            if level.id > 2 {
+                XCTAssertGreaterThanOrEqual(level.solution.count + 3, previousLength, "Level \(level.id) should not be much easier than the last")
+            }
+            previousLength = level.solution.count
+        }
+    }
+
+    func testSolverFindsShortestSolutionAndRejectsDeadBoards() {
+        let level = TopOffLevels.handcrafted[0]
+        XCTAssertEqual(Solver.solve(level.board)?.count, 3)
+
+        let stuck = Board(containers: [
+            Container(capacity: 2, layers: [LiquidColor(1), LiquidColor(2)]),
+            Container(capacity: 2, layers: [LiquidColor(2), LiquidColor(1)])
+        ])
+        XCTAssertNil(Solver.solve(stuck))
     }
 
 }

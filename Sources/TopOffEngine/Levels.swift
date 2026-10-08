@@ -43,62 +43,42 @@ public enum TopOffLevels {
                 Move(from: 2, to: 1),
                 Move(from: 2, to: 3)
             ]
-        ),
-        TopOffLevel(
-            id: 3,
-            board: Board(containers: [
-                Container(capacity: 3, layers: [red, blue, green]),
-                Container(capacity: 3, layers: [green, red, blue]),
-                Container(capacity: 3, layers: [blue, green, red]),
-                Container(capacity: 3),
-                Container(capacity: 3)
-            ]),
-            solution: [
-                Move(from: 0, to: 3),
-                Move(from: 1, to: 0),
-                Move(from: 2, to: 1),
-                Move(from: 2, to: 3),
-                Move(from: 0, to: 2),
-                Move(from: 1, to: 0),
-                Move(from: 1, to: 3)
-            ]
-        ),
-        TopOffLevel(
-            id: 4,
-            board: Board(containers: [
-                Container(capacity: 3, layers: [red, blue, red]),
-                Container(capacity: 3, layers: [blue, green, green]),
-                Container(capacity: 3, layers: [green, blue, red]),
-                Container(capacity: 3),
-                Container(capacity: 3)
-            ]),
-            solution: [
-                Move(from: 0, to: 3),
-                Move(from: 2, to: 3),
-                Move(from: 2, to: 0),
-                Move(from: 1, to: 2),
-                Move(from: 0, to: 1),
-                Move(from: 0, to: 3)
-            ]
-        ),
-        TopOffLevel(
-            id: 5,
-            board: Board(containers: [
-                Container(capacity: 3, layers: [red, blue, green]),
-                Container(capacity: 3, layers: [blue, green, red]),
-                Container(capacity: 3, layers: [green, red, blue]),
-                Container(capacity: 3),
-                Container(capacity: 3)
-            ]),
-            solution: [
-                Move(from: 0, to: 3),
-                Move(from: 2, to: 0),
-                Move(from: 1, to: 2),
-                Move(from: 1, to: 3),
-                Move(from: 0, to: 1),
-                Move(from: 2, to: 0),
-                Move(from: 2, to: 3)
-            ]
         )
     ]
+
+    private struct GeneratedSpec {
+        let seed: UInt64
+        let colors: Int
+        let capacity: Int
+        let empties: Int
+    }
+
+    /// Seeds were picked offline with `Solver` for a steady difficulty ramp; see `testCampaignRamp`.
+    private static let generated: [GeneratedSpec] = [
+        GeneratedSpec(seed: 1, colors: 3, capacity: 3, empties: 2),   // 7 moves
+        GeneratedSpec(seed: 2, colors: 4, capacity: 3, empties: 2),   // 9
+        GeneratedSpec(seed: 2, colors: 4, capacity: 4, empties: 2),   // 14
+        GeneratedSpec(seed: 1, colors: 5, capacity: 4, empties: 2),   // 16
+        GeneratedSpec(seed: 8, colors: 5, capacity: 4, empties: 1),   // 17, one spare bottle
+        GeneratedSpec(seed: 29, colors: 6, capacity: 4, empties: 2),  // 20
+        GeneratedSpec(seed: 29, colors: 6, capacity: 4, empties: 1)   // 21, one spare bottle
+    ]
+
+    /// The full ramp: two handcrafted teaching levels, then solver-verified generated levels.
+    public static let campaign: [TopOffLevel] = {
+        var levels = handcrafted
+        for spec in generated {
+            let board = LevelGenerator.board(
+                seed: spec.seed,
+                colors: spec.colors,
+                capacity: spec.capacity,
+                empties: spec.empties
+            )
+            guard let solution = Solver.solve(board) else {
+                preconditionFailure("Generated level with seed \(spec.seed) is unsolvable")
+            }
+            levels.append(TopOffLevel(id: levels.count + 1, board: board, solution: solution))
+        }
+        return levels
+    }()
 }

@@ -106,7 +106,7 @@ private struct TopOffRootView: View {
                 .foregroundStyle(.yellow)
             Text("All topped off")
                 .font(.system(size: 28, weight: .heavy, design: .rounded))
-            Text("Five levels, zero spills.")
+            Text("\(shell.levelCount) levels, zero spills.")
                 .font(.system(size: 15, weight: .medium, design: .rounded))
                 .foregroundStyle(.white.opacity(0.65))
 
@@ -172,7 +172,7 @@ private final class TopOffShellModel: ObservableObject {
     @Published private(set) var canUndo = false
     @Published private(set) var showTitle = false
 
-    private let levels = TopOffLevels.handcrafted
+    private let levels = TopOffLevels.campaign
     private let feedback = GameFeedbackController(
         audio: TopOffAudioController(),
         haptics: TopOffHapticsController()
@@ -185,16 +185,16 @@ private final class TopOffShellModel: ObservableObject {
         var startIndex = 0
         #if DEBUG
         if let raw = ProcessInfo.processInfo.environment["TOPOFF_LEVEL"], let value = Int(raw) {
-            startIndex = max(0, min(value - 1, TopOffLevels.handcrafted.count - 1))
+            startIndex = max(0, min(value - 1, TopOffLevels.campaign.count - 1))
         }
         #endif
-        let first = TopOffScene(level: TopOffLevels.handcrafted[startIndex], feedback: feedback)
+        let first = TopOffScene(level: TopOffLevels.campaign[startIndex], feedback: feedback)
         scene = first
         levelIndex = startIndex
         attachHandlers(to: first)
         #if DEBUG
         if ProcessInfo.processInfo.environment["TOPOFF_AUTOPLAY"] != nil {
-            first.debugAutoplay(TopOffLevels.handcrafted[startIndex].solution)
+            first.debugAutoplay(TopOffLevels.campaign[startIndex].solution)
         }
         #endif
         flashTitle()
