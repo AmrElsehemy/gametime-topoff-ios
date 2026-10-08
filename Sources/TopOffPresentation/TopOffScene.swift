@@ -33,6 +33,13 @@ public final class TopOffScene: SKScene {
 
     private var lastSplash: TimeInterval = 0
 
+    /// Draws a distinct glyph on each colour so the puzzle never depends on colour alone.
+    public var showsColorSymbols = false {
+        didSet {
+            for bottle in bottles { bottle.setSymbolsVisible(showsColorSymbols) }
+        }
+    }
+
     public var onSolved: (() -> Void)?
     /// Reports move count and undo availability whenever either changes.
     public var onStateChange: ((_ moves: Int, _ canUndo: Bool) -> Void)?
@@ -470,11 +477,20 @@ public final class TopOffScene: SKScene {
         let columns = count <= 4 ? count : Int(ceil(Double(count) / 2))
         let rows = Int(ceil(Double(count) / Double(columns)))
         let gap: CGFloat = 16
-        let width = min(92, (size.width - 40 - CGFloat(columns - 1) * gap) / CGFloat(columns))
-        let tallest = CGFloat(containers.map(\.capacity).max() ?? 3) * width * 0.8 + width * 0.56
         let rowGap: CGFloat = 40
+        let maxCapacity = CGFloat(containers.map(\.capacity).max() ?? 3)
+        // Keep the board clear of the HUD above and the home indicator below, shrinking bottles
+        // on tall boards instead of letting them run underneath the controls.
+        let topInset: CGFloat = 175
+        let bottomInset: CGFloat = 70
+        let availableHeight = size.height - topInset - bottomInset
+        let heightPerWidth = maxCapacity * 0.8 + 0.56
+        let widthForHeight = (availableHeight - CGFloat(rows - 1) * rowGap) / (CGFloat(rows) * heightPerWidth)
+        let widthForColumns = (size.width - 40 - CGFloat(columns - 1) * gap) / CGFloat(columns)
+        let width = min(92, widthForColumns, widthForHeight)
+        let tallest = heightPerWidth * width
         let boardHeight = CGFloat(rows) * tallest + CGFloat(rows - 1) * rowGap
-        let topY = size.height / 2 - 40 + boardHeight / 2
+        let topY = size.height - topInset - (availableHeight - boardHeight) / 2
 
         for (index, container) in containers.enumerated() {
             let row = index / columns
@@ -491,6 +507,7 @@ public final class TopOffScene: SKScene {
             bottle.position = home
             bottle.zPosition = 10
             bottle.setLayers(container.layers, hidden: displayedHidden(container))
+            bottle.setSymbolsVisible(showsColorSymbols)
             bottle.setComplete(
                 container.isFull && container.isUniform,
                 color: container.topColor,

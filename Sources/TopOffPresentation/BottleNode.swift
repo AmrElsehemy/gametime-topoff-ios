@@ -15,6 +15,18 @@ enum TopOffPalette {
         }
     }
 
+    /// A distinct glyph per colour, shown when pattern mode is on so colour is never the only cue.
+    static func symbol(for color: LiquidColor) -> String {
+        switch color.id % 6 {
+        case 1: return "⬤"
+        case 2: return "▲"
+        case 3: return "■"
+        case 4: return "◆"
+        case 5: return "★"
+        default: return "✚"
+        }
+    }
+
     static let concealed = SKColor(red: 0.27, green: 0.29, blue: 0.40, alpha: 1)
 
     static func lighter(for color: LiquidColor) -> SKColor {
@@ -50,6 +62,9 @@ final class BottleNode: SKNode {
     private var runNodes: [SKSpriteNode] = []
     private var shadeNodes: [SKSpriteNode] = []
     private var questionMarks: [SKLabelNode] = []
+    private var symbolMarks: [SKLabelNode] = []
+    private var symbolsVisible = false
+    private var lastRuns: [(color: LiquidColor, concealed: Bool)] = []
     private var shownHidden = 0
     private var topRunFrame: (y: CGFloat, height: CGFloat) = (0, 0)
     private var highlighted = false
@@ -179,15 +194,25 @@ final class BottleNode: SKNode {
             mark.horizontalAlignmentMode = .center
             mark.zPosition = 2
             node.addChild(mark)
+            let symbol = SKLabelNode(text: "")
+            symbol.fontName = "AvenirNext-Heavy"
+            symbol.fontSize = unit * 0.42
+            symbol.fontColor = SKColor(white: 1, alpha: 0.8)
+            symbol.verticalAlignmentMode = .center
+            symbol.horizontalAlignmentMode = .center
+            symbol.zPosition = 2
+            node.addChild(symbol)
             liquidRoot.addChild(node)
             runNodes.append(node)
             shadeNodes.append(shade)
             questionMarks.append(mark)
+            symbolMarks.append(symbol)
         }
         while runNodes.count > runs.count {
             runNodes.removeLast().removeFromParent()
             shadeNodes.removeLast()
             questionMarks.removeLast()
+            symbolMarks.removeLast()
         }
 
         let wide = bodyHeight * 1.4
@@ -198,6 +223,9 @@ final class BottleNode: SKNode {
             let extra: CGFloat = index == 0 ? bodyHeight * 0.6 : 0
             node.color = run.concealed ? TopOffPalette.concealed : TopOffPalette.color(for: run.color)
             questionMarks[index].isHidden = !run.concealed
+            symbolMarks[index].text = TopOffPalette.symbol(for: run.color)
+            symbolMarks[index].isHidden = run.concealed || !symbolsVisible
+            symbolMarks[index].position = CGPoint(x: 0, y: extra + run.height / 2)
             questionMarks[index].position = CGPoint(x: 0, y: extra + run.height / 2)
             node.size = CGSize(width: wide, height: run.height + extra + 0.5)
             node.position = CGPoint(x: 0, y: y - extra)
@@ -214,6 +242,7 @@ final class BottleNode: SKNode {
         let fill = (y + bodyHeight / 2 - 4) / (unit * CGFloat(capacity))
         shading.alpha = 0.4 + 0.6 * min(max(fill, 0), 1)
 
+        lastRuns = runs.map { ($0.color, $0.concealed) }
         if let top = runs.last {
             topRunFrame = (y - top.height, top.height)
         }
@@ -221,6 +250,13 @@ final class BottleNode: SKNode {
         shownHidden = hidden
         if revealed { flashTopRun() }
         return revealed
+    }
+
+    func setSymbolsVisible(_ on: Bool) {
+        symbolsVisible = on
+        for (index, run) in lastRuns.enumerated() where index < symbolMarks.count {
+            symbolMarks[index].isHidden = run.concealed || !on
+        }
     }
 
     private func flashTopRun() {

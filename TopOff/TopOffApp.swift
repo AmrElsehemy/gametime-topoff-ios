@@ -39,6 +39,11 @@ private struct TopOffRootView: View {
                 }
             }
             .animation(.easeOut(duration: 0.25), value: shell.moves)
+            .overlay(alignment: .bottomTrailing) {
+                symbolToggle
+                    .padding(.trailing, 18)
+                    .padding(.bottom, 14)
+            }
 
             if shell.showTitle {
                 VStack(spacing: 6) {
@@ -97,6 +102,20 @@ private struct TopOffRootView: View {
         }
         .padding(.horizontal, 18)
         .padding(.top, 10)
+    }
+
+    private var symbolToggle: some View {
+        Button(action: shell.toggleSymbols) {
+            Image(systemName: shell.showsSymbols ? "eye.fill" : "eye")
+                .font(.system(size: 17, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 46, height: 46)
+                .background(.ultraThinMaterial, in: Circle())
+                .overlay { Circle().stroke(.white.opacity(shell.showsSymbols ? 0.6 : 0.14), lineWidth: 1) }
+        }
+        .buttonStyle(PressableStyle())
+        .accessibilityLabel("Colour-blind symbols")
+        .accessibilityValue(shell.showsSymbols ? "On" : "Off")
     }
 
     private var finishCard: some View {
@@ -171,6 +190,7 @@ private final class TopOffShellModel: ObservableObject {
     @Published private(set) var moves = 0
     @Published private(set) var canUndo = false
     @Published private(set) var showTitle = false
+    @Published private(set) var showsSymbols = UserDefaults.standard.bool(forKey: "colorBlindSymbols")
 
     private let levels = TopOffLevels.campaign
     private let feedback = GameFeedbackController(
@@ -189,6 +209,7 @@ private final class TopOffShellModel: ObservableObject {
         }
         #endif
         let first = TopOffScene(level: TopOffLevels.campaign[startIndex], feedback: feedback)
+        first.showsColorSymbols = UserDefaults.standard.bool(forKey: "colorBlindSymbols")
         scene = first
         levelIndex = startIndex
         attachHandlers(to: first)
@@ -202,6 +223,12 @@ private final class TopOffShellModel: ObservableObject {
 
     func undo() {
         scene.undo()
+    }
+
+    func toggleSymbols() {
+        showsSymbols.toggle()
+        UserDefaults.standard.set(showsSymbols, forKey: "colorBlindSymbols")
+        scene.showsColorSymbols = showsSymbols
     }
 
     func restart() {
@@ -228,6 +255,7 @@ private final class TopOffShellModel: ObservableObject {
 
     private func loadCurrentLevel() {
         let next = TopOffScene(level: levels[levelIndex], feedback: feedback)
+        next.showsColorSymbols = showsSymbols
         attachHandlers(to: next)
         moves = 0
         canUndo = false
