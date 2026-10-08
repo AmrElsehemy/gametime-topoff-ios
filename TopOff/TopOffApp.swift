@@ -27,7 +27,7 @@ private struct TopOffRootView: View {
             VStack(spacing: 0) {
                 topBar
                 Spacer()
-                if shell.levelIndex == 0, shell.moves == 0, !shell.didFinishPrototype {
+                if shell.levelIndex == 0, !shell.isDaily, shell.moves == 0, !shell.didFinishPrototype {
                     Text("Tap a bottle, then tap another to pour")
                         .font(.system(size: 14, weight: .semibold, design: .rounded))
                         .foregroundStyle(.white.opacity(0.6))
@@ -43,11 +43,11 @@ private struct TopOffRootView: View {
 
             if shell.showTitle {
                 VStack(spacing: 6) {
-                    Text("LEVEL")
+                    Text(shell.isDaily ? "TODAY'S" : "LEVEL")
                         .font(.system(size: 15, weight: .heavy, design: .rounded))
                         .tracking(5)
                         .foregroundStyle(.white.opacity(0.6))
-                    Text("\(shell.levelNumber)")
+                    Text(shell.isDaily ? "Daily" : "\(shell.levelNumber)")
                         .font(.system(size: 88, weight: .black, design: .rounded))
                         .foregroundStyle(.white)
                     if shell.levelHasHiddenLayers {
@@ -92,19 +92,26 @@ private struct TopOffRootView: View {
                 shell.showMenu = true
             } label: {
                 VStack(spacing: 8) {
-                    Text("LEVEL \(shell.levelNumber)")
+                    Text(shell.levelLabel)
                         .font(.system(size: 15, weight: .heavy, design: .rounded))
                         .tracking(3)
                         .foregroundStyle(.white)
 
-                    HStack(spacing: 6) {
-                        ForEach(0..<shell.levelCount, id: \.self) { index in
-                            Capsule()
-                                .fill(dotColor(for: index))
-                                .frame(width: index == shell.levelIndex ? 20 : 7, height: 7)
+                    if shell.isDaily {
+                        Label("Streak \(shell.dailyStreak)", systemImage: "flame.fill")
+                            .font(.system(size: 11, weight: .bold, design: .rounded))
+                            .foregroundStyle(.orange)
+                            .frame(height: 7 + 8)
+                    } else {
+                        HStack(spacing: 6) {
+                            ForEach(0..<shell.levelCount, id: \.self) { index in
+                                Capsule()
+                                    .fill(dotColor(for: index))
+                                    .frame(width: index == shell.levelIndex ? 20 : 7, height: 7)
+                            }
                         }
+                        .animation(.spring(duration: 0.35), value: shell.levelIndex)
                     }
-                    .animation(.spring(duration: 0.35), value: shell.levelIndex)
 
                     Text(shell.moves == 1 ? "1 move" : "\(shell.moves) moves")
                         .font(.system(size: 12, weight: .semibold, design: .rounded))
@@ -117,7 +124,7 @@ private struct TopOffRootView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Level \(shell.levelNumber). Open level select")
+            .accessibilityLabel("\(shell.levelLabel). Open level select")
 
             Spacer()
 
@@ -290,6 +297,8 @@ private struct TopOffMenuView: View {
                         .foregroundStyle(.yellow)
                 }
 
+                dailyCard
+
                 LazyVGrid(columns: columns, spacing: 12) {
                     ForEach(0..<shell.levelCount, id: \.self) { index in
                         levelTile(index)
@@ -314,6 +323,52 @@ private struct TopOffMenuView: View {
         }
         .background(Color(red: 0.07, green: 0.07, blue: 0.14).ignoresSafeArea())
         .preferredColorScheme(.dark)
+    }
+
+    private var dailyCard: some View {
+        let solved = shell.dailyMoves
+        return Button {
+            shell.playDaily()
+        } label: {
+            HStack(spacing: 14) {
+                Image(systemName: "calendar")
+                    .font(.system(size: 26, weight: .bold))
+                    .foregroundStyle(.orange)
+                    .frame(width: 44)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Daily Puzzle")
+                        .font(.system(size: 18, weight: .heavy, design: .rounded))
+                    Text(solved.map { "Solved in \($0) moves" } ?? "A new board every day")
+                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.6))
+                }
+                Spacer()
+                VStack(alignment: .trailing, spacing: 2) {
+                    Label("\(shell.dailyStreak)", systemImage: "flame.fill")
+                        .font(.system(size: 16, weight: .bold, design: .rounded))
+                        .foregroundStyle(.orange)
+                    Text("day streak")
+                        .font(.system(size: 10, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.45))
+                }
+            }
+            .foregroundStyle(.white)
+            .padding(16)
+            .background(
+                LinearGradient(
+                    colors: [.orange.opacity(0.22), .orange.opacity(0.07)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                ),
+                in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(.orange.opacity(0.35), lineWidth: 1)
+            }
+        }
+        .buttonStyle(PressableStyle())
+        .accessibilityLabel("Daily puzzle, \(shell.dailyStreak) day streak")
     }
 
     private func levelTile(_ index: Int) -> some View {
@@ -384,6 +439,7 @@ private final class TopOffShellModel: ObservableObject {
     @Published private(set) var showTitle = false
     @Published private(set) var result: Result?
     @Published private(set) var progress: TopOffProgress
+    @Published private(set) var dailyLevel: TopOffLevel?
     @Published var showMenu = false
 
     private let levels = TopOffLevels.campaign
@@ -395,7 +451,14 @@ private final class TopOffShellModel: ObservableObject {
 
     var levelNumber: Int { min(levelIndex + 1, levels.count) }
     var levelCount: Int { levels.count }
-    var levelHasHiddenLayers: Bool { levels[levelIndex].hasHiddenLayers }
+    var isDaily: Bool { dailyLevel != nil }
+    var levelLabel: String { isDaily ? "DAILY" : "LEVEL \(levelNumber)" }
+    var currentLevel: TopOffLevel { dailyLevel ?? levels[levelIndex] }
+    var levelHasHiddenLayers: Bool { currentLevel.hasHiddenLayers }
+
+    private var today: Int { DailyPuzzle.dayNumber(for: Date()) }
+    var dailyStreak: Int { progress.dailyStreak(today: today) }
+    var dailyMoves: Int? { progress.dailyBest[today] }
 
     var totalStars: Int {
         levels.indices.reduce(0) { $0 + stars(forLevelAt: $1) }
@@ -429,6 +492,7 @@ private final class TopOffShellModel: ObservableObject {
         flashTitle()
         #if DEBUG
         if ProcessInfo.processInfo.environment["TOPOFF_MENU"] != nil { showMenu = true }
+        if ProcessInfo.processInfo.environment["TOPOFF_DAILY"] != nil { playDaily() }
         #endif
     }
 
@@ -498,9 +562,20 @@ private final class TopOffShellModel: ObservableObject {
     func hint() { scene.showHint() }
     func addBottle() { scene.addExtraBottle() }
 
+    func playDaily() {
+        showMenu = false
+        withAnimation(.spring(duration: 0.3)) {
+            didFinishPrototype = false
+            result = nil
+        }
+        dailyLevel = DailyPuzzle.level(forDay: today)
+        loadCurrentLevel()
+    }
+
     func play(levelAt index: Int) {
         guard isUnlocked(index) else { return }
         showMenu = false
+        dailyLevel = nil
         withAnimation(.spring(duration: 0.3)) {
             didFinishPrototype = false
             result = nil
@@ -518,11 +593,19 @@ private final class TopOffShellModel: ObservableObject {
     }
 
     private func handleSolved(moves: Int) {
-        let level = levels[levelIndex]
-        let previousBest = progress.bestMoves[level.id]
+        let level = currentLevel
+        let daily = isDaily
+        let previousBest = daily ? progress.dailyBest[level.id] : progress.bestMoves[level.id]
         let isBest = previousBest.map { moves < $0 } ?? true
         if isBest {
-            update { $0.bestMoves[level.id] = moves }
+            update {
+                if daily {
+                    // Key by the puzzle's own day so a puzzle opened before midnight still counts for its day.
+                    $0.dailyBest[level.id] = moves
+                } else {
+                    $0.bestMoves[level.id] = moves
+                }
+            }
         }
 
         withAnimation(.spring(duration: 0.4)) {
@@ -531,8 +614,22 @@ private final class TopOffShellModel: ObservableObject {
         Task { @MainActor [weak self] in
             try? await Task.sleep(for: .milliseconds(1400))
             withAnimation(.easeIn(duration: 0.2)) { self?.result = nil }
-            self?.advance()
+            if daily {
+                self?.leaveDaily()
+            } else {
+                self?.advance()
+            }
         }
+    }
+
+    /// After a daily puzzle, go back to where the campaign was and show the streak in the menu.
+    private func leaveDaily() {
+        dailyLevel = nil
+        if let next = levels.firstIndex(where: { progress.bestMoves[$0.id] == nil }) {
+            levelIndex = next
+        }
+        loadCurrentLevel()
+        showMenu = true
     }
 
     private func advance() {
@@ -548,7 +645,7 @@ private final class TopOffShellModel: ObservableObject {
     }
 
     private func loadCurrentLevel() {
-        let next = TopOffScene(level: levels[levelIndex], feedback: feedback)
+        let next = TopOffScene(level: currentLevel, feedback: feedback)
         apply(progress, to: next)
         attachHandlers(to: next)
         moves = 0
