@@ -51,17 +51,32 @@ public enum TopOffLevels {
         let colors: Int
         let capacity: Int
         let empties: Int
+        /// Top layers of each bottle that start visible. nil means everything is visible.
+        var visibleLayers: Int?
+
+        init(seed: UInt64, colors: Int, capacity: Int, empties: Int, visibleLayers: Int? = nil) {
+            self.seed = seed
+            self.colors = colors
+            self.capacity = capacity
+            self.empties = empties
+            self.visibleLayers = visibleLayers
+        }
     }
 
     /// Seeds were picked offline with `Solver` for a steady difficulty ramp; see `testCampaignRamp`.
+    /// Comments give the shortest solution length. Levels with `visibleLayers` introduce
+    /// concealed layers, which are revealed once everything above them is poured away.
     private static let generated: [GeneratedSpec] = [
-        GeneratedSpec(seed: 1, colors: 3, capacity: 3, empties: 2),   // 7 moves
-        GeneratedSpec(seed: 2, colors: 4, capacity: 3, empties: 2),   // 9
-        GeneratedSpec(seed: 2, colors: 4, capacity: 4, empties: 2),   // 14
-        GeneratedSpec(seed: 1, colors: 5, capacity: 4, empties: 2),   // 16
-        GeneratedSpec(seed: 8, colors: 5, capacity: 4, empties: 1),   // 17, one spare bottle
-        GeneratedSpec(seed: 29, colors: 6, capacity: 4, empties: 2),  // 20
-        GeneratedSpec(seed: 29, colors: 6, capacity: 4, empties: 1)   // 21, one spare bottle
+        GeneratedSpec(seed: 1, colors: 3, capacity: 3, empties: 2),                     // 3: 7
+        GeneratedSpec(seed: 2, colors: 4, capacity: 3, empties: 2),                     // 4: 9
+        GeneratedSpec(seed: 2, colors: 4, capacity: 4, empties: 2),                     // 5: 14
+        GeneratedSpec(seed: 1, colors: 3, capacity: 3, empties: 2, visibleLayers: 2),   // 6: 7, first mystery
+        GeneratedSpec(seed: 1, colors: 5, capacity: 4, empties: 2),                     // 7: 16
+        GeneratedSpec(seed: 1, colors: 4, capacity: 4, empties: 2, visibleLayers: 2),   // 8: 12
+        GeneratedSpec(seed: 8, colors: 5, capacity: 4, empties: 1),                     // 9: 17, one spare bottle
+        GeneratedSpec(seed: 2, colors: 5, capacity: 4, empties: 2, visibleLayers: 2),   // 10: 15
+        GeneratedSpec(seed: 29, colors: 6, capacity: 4, empties: 2),                    // 11: 20
+        GeneratedSpec(seed: 4, colors: 6, capacity: 4, empties: 2, visibleLayers: 1)    // 12: 21, only tops visible
     ]
 
     /// The full ramp: two handcrafted teaching levels, then solver-verified generated levels.
@@ -72,7 +87,8 @@ public enum TopOffLevels {
                 seed: spec.seed,
                 colors: spec.colors,
                 capacity: spec.capacity,
-                empties: spec.empties
+                empties: spec.empties,
+                visibleLayers: spec.visibleLayers
             )
             guard let solution = Solver.solve(board) else {
                 preconditionFailure("Generated level with seed \(spec.seed) is unsolvable")

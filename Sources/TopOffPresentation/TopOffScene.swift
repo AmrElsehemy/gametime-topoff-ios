@@ -312,10 +312,20 @@ public final class TopOffScene: SKScene {
         // Source still holds the poured units; they drain as `progress` grows.
         let sourceLayers = game.board.containers[pour.move.from].layers
             + Array(repeating: pour.color, count: pour.amount)
-        source.setLayers(sourceLayers, partialTop: pour.amount, factor: 1 - progress)
+        source.setLayers(
+            sourceLayers,
+            hidden: pour.sourceHiddenBefore,
+            partialTop: pour.amount,
+            factor: 1 - progress
+        )
 
-        let targetLayers = game.board.containers[pour.move.to].layers
-        target.setLayers(targetLayers, partialTop: pour.amount, factor: progress)
+        let targetContainer = game.board.containers[pour.move.to]
+        target.setLayers(
+            targetContainer.layers,
+            hidden: displayedHidden(targetContainer),
+            partialTop: pour.amount,
+            factor: progress
+        )
 
         updateStream(animation, source: source, target: target, angle: angle, progress: progress, t: t, flow: flow)
         if progress > 0.02, progress < 0.98, currentTime - lastSplash > 0.05 {
@@ -420,12 +430,29 @@ public final class TopOffScene: SKScene {
 
     // MARK: - Rendering
 
+    /// A finished bottle shows its true colours even if it started with concealed layers.
+    private func displayedHidden(_ container: Container) -> Int {
+        container.isFull && container.isUniform ? 0 : container.hiddenLayers
+    }
+
     private func refreshBottles(animated: Bool) {
+        var revealed = false
+        var completedNow = false
         for (index, container) in game.board.containers.enumerated() {
             let bottle = bottles[index]
-            bottle.setLayers(container.layers)
+            if bottle.setLayers(container.layers, hidden: displayedHidden(container)), animated {
+                revealed = true
+            }
             let complete = container.isFull && container.isUniform
+            if complete, !bottle.isComplete { completedNow = true }
             bottle.setComplete(complete, color: container.topColor, animated: animated)
+        }
+        guard animated, activePour == nil else { return }
+        // A solve has its own fanfare, so the smaller cues only play mid-level.
+        if completedNow, !game.isSolved {
+            feedback.play(.milestone, soundEnabled: true, hapticsEnabled: true)
+        } else if revealed {
+            feedback.play(.hint, soundEnabled: true, hapticsEnabled: true)
         }
     }
 
@@ -463,7 +490,7 @@ public final class TopOffScene: SKScene {
 
             bottle.position = home
             bottle.zPosition = 10
-            bottle.setLayers(container.layers)
+            bottle.setLayers(container.layers, hidden: displayedHidden(container))
             bottle.setComplete(
                 container.isFull && container.isUniform,
                 color: container.topColor,

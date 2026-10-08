@@ -122,12 +122,16 @@ final class TopOffEngineTests: XCTestCase {
         let levels = TopOffLevels.campaign
         XCTAssertEqual(levels.map(\.id), Array(1...levels.count))
 
+        // Concealed-layer levels are shorter on paper but harder to play, so the length ramp
+        // is only checked across fully visible levels.
         var previousLength = 0
         for level in levels {
             var game = Game(board: level.board)
             XCTAssertFalse(game.isSolved, "Level \(level.id) should start unsolved")
             for move in level.solution { try game.pour(move) }
             XCTAssertTrue(game.isSolved, "Level \(level.id) solution should solve the board")
+            let hasHidden = level.board.containers.contains { $0.hiddenLayers > 0 }
+            if hasHidden { continue }
             if level.id > 2 {
                 XCTAssertGreaterThanOrEqual(level.solution.count + 3, previousLength, "Level \(level.id) should not be much easier than the last")
             }
@@ -146,4 +150,34 @@ final class TopOffEngineTests: XCTestCase {
         XCTAssertNil(Solver.solve(stuck))
     }
 
+
+    func testHiddenLayersRevealOnlyWhenExposedAndUndoRestoresThem() throws {
+        let red = LiquidColor(1), blue = LiquidColor(2)
+        // Bottom to top: blue (hidden), red, red. Only the two reds are visible.
+        let board = Board(containers: [
+            Container(capacity: 3, layers: [blue, red, red], hiddenLayers: 1),
+            Container(capacity: 3)
+        ])
+        XCTAssertEqual(board.containers[0].hiddenLayers, 1)
+        XCTAssertEqual(board.containers[0].topRunLength, 2)
+
+        var game = Game(board: board)
+        try game.pour(Move(from: 0, to: 1))
+        XCTAssertEqual(game.board.containers[0].layers, [blue])
+        XCTAssertEqual(game.board.containers[0].hiddenLayers, 0, "Blue is exposed and now visible")
+
+        game.undo()
+        XCTAssertEqual(game.board.containers[0].hiddenLayers, 1, "Undo conceals it again")
+        XCTAssertEqual(game.board, board)
+    }
+
+    func testConcealedLayersNeverJoinThePouredRun() {
+        let red = LiquidColor(1)
+        // Hidden red under a visible red must not move with it.
+        let board = Board(containers: [
+            Container(capacity: 3, layers: [red, red], hiddenLayers: 1),
+            Container(capacity: 3)
+        ])
+        XCTAssertEqual(try? board.validate(Move(from: 0, to: 1)), 1)
+    }
 }

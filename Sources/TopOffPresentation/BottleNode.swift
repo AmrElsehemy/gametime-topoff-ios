@@ -15,6 +15,8 @@ enum TopOffPalette {
         }
     }
 
+    static let concealed = SKColor(red: 0.27, green: 0.29, blue: 0.40, alpha: 1)
+
     static func lighter(for color: LiquidColor) -> SKColor {
         var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
         self.color(for: color).getRed(&r, green: &g, blue: &b, alpha: &a)
@@ -47,6 +49,9 @@ final class BottleNode: SKNode {
     private let shading = SKSpriteNode()
     private var runNodes: [SKSpriteNode] = []
     private var shadeNodes: [SKSpriteNode] = []
+    private var questionMarks: [SKLabelNode] = []
+    private var shownHidden = 0
+    private var topRunFrame: (y: CGFloat, height: CGFloat) = (0, 0)
     private var highlighted = false
     private var completeColor: LiquidColor?
     private var cap: SKShapeNode?
@@ -137,16 +142,26 @@ final class BottleNode: SKNode {
 
     /// Draws `layers` bottom to top. The last `partialTop` layers are scaled by `factor`,
     /// which is how a pour drains one bottle and fills another.
-    func setLayers(_ layers: [LiquidColor], partialTop: Int = 0, factor: CGFloat = 1) {
-        var runs: [(color: LiquidColor, height: CGFloat)] = []
+    /// The lowest `hidden` layers are drawn as unknown. Returns true when layers were revealed
+    /// since the last call, after flashing the newly exposed run.
+    @discardableResult
+    func setLayers(
+        _ layers: [LiquidColor],
+        hidden: Int = 0,
+        partialTop: Int = 0,
+        factor: CGFloat = 1
+    ) -> Bool {
+        var runs: [(color: LiquidColor, height: CGFloat, concealed: Bool)] = []
         for (index, color) in layers.enumerated() {
             let isPartial = index >= layers.count - partialTop
             let height = isPartial ? unit * factor : unit
             guard height > 0.001 else { continue }
-            if let last = runs.last, last.color == color {
+            if index < hidden {
+                runs.append((color, height, true))
+            } else if let last = runs.last, !last.concealed, last.color == color {
                 runs[runs.count - 1].height += height
             } else {
-                runs.append((color, height))
+                runs.append((color, height, false))
             }
         }
 
@@ -156,22 +171,34 @@ final class BottleNode: SKNode {
             let shade = SKSpriteNode(texture: Self.verticalShadeTexture, color: .white, size: .zero)
             shade.anchorPoint = CGPoint(x: 0.5, y: 0)
             node.addChild(shade)
+            let mark = SKLabelNode(text: "?")
+            mark.fontName = "AvenirNext-Heavy"
+            mark.fontSize = unit * 0.5
+            mark.fontColor = SKColor(white: 1, alpha: 0.55)
+            mark.verticalAlignmentMode = .center
+            mark.horizontalAlignmentMode = .center
+            mark.zPosition = 2
+            node.addChild(mark)
             liquidRoot.addChild(node)
             runNodes.append(node)
             shadeNodes.append(shade)
+            questionMarks.append(mark)
         }
         while runNodes.count > runs.count {
             runNodes.removeLast().removeFromParent()
             shadeNodes.removeLast()
+            questionMarks.removeLast()
         }
 
         let wide = bodyHeight * 1.4
         var y = -bodyHeight / 2 + 4
         for (index, run) in runs.enumerated() {
             let node = runNodes[index]
-            node.color = TopOffPalette.color(for: run.color)
             // The first run reaches far below so a tilted bottle never shows a gap.
             let extra: CGFloat = index == 0 ? bodyHeight * 0.6 : 0
+            node.color = run.concealed ? TopOffPalette.concealed : TopOffPalette.color(for: run.color)
+            questionMarks[index].isHidden = !run.concealed
+            questionMarks[index].position = CGPoint(x: 0, y: extra + run.height / 2)
             node.size = CGSize(width: wide, height: run.height + extra + 0.5)
             node.position = CGPoint(x: 0, y: y - extra)
             node.zPosition = CGFloat(index)
@@ -186,6 +213,27 @@ final class BottleNode: SKNode {
         }
         let fill = (y + bodyHeight / 2 - 4) / (unit * CGFloat(capacity))
         shading.alpha = 0.4 + 0.6 * min(max(fill, 0), 1)
+
+        if let top = runs.last {
+            topRunFrame = (y - top.height, top.height)
+        }
+        let revealed = hidden < shownHidden
+        shownHidden = hidden
+        if revealed { flashTopRun() }
+        return revealed
+    }
+
+    private func flashTopRun() {
+        let flash = SKSpriteNode(
+            color: .white,
+            size: CGSize(width: bodyHeight * 1.4, height: topRunFrame.height)
+        )
+        flash.anchorPoint = CGPoint(x: 0.5, y: 0)
+        flash.position = CGPoint(x: 0, y: topRunFrame.y)
+        flash.alpha = 0.75
+        flash.zPosition = 50
+        liquidRoot.addChild(flash)
+        flash.run(.sequence([.fadeOut(withDuration: 0.4), .removeFromParent()]))
     }
 
     /// A small post-pour wobble of the liquid surface.

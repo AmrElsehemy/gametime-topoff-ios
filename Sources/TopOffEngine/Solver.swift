@@ -1,68 +1,59 @@
 /// Breadth-first solver. Returns a shortest solution, or nil if the board is unsolvable
-/// or the search exceeds `stateLimit` distinct positions.
+/// or the search exceeds `stateLimit` distinct positions. It plays by the player's rules,
+/// so concealed layers limit how much a pour can move, but it sees every colour.
 public enum Solver {
     public static func solve(_ board: Board, stateLimit: Int = 2_000_000) -> [Move]? {
-        let capacities = board.containers.map(\.capacity)
-        let start = board.containers.map { $0.layers.map { UInt8($0.id) } }
-
-        func isSolved(_ state: [[UInt8]]) -> Bool {
-            for (index, bottle) in state.enumerated() {
-                if bottle.isEmpty { continue }
-                guard bottle.count == capacities[index], bottle.allSatisfy({ $0 == bottle[0] }) else {
-                    return false
-                }
-            }
-            return true
-        }
+        let start = board.containers
 
         // Bottle order never matters for solvability, so positions are keyed by their sorted form.
-        func key(_ state: [[UInt8]]) -> [UInt8] {
+        func key(_ state: [Container]) -> [UInt8] {
+            var rows: [[UInt8]] = state.map { bottle in
+                bottle.layers.map { UInt8($0.id) } + [254, UInt8(bottle.hiddenLayers)]
+            }
+            rows.sort { $0.lexicographicallyPrecedes($1) }
             var flat: [UInt8] = []
-            for bottle in state.sorted(by: { $0.lexicographicallyPrecedes($1) }) {
-                flat.append(contentsOf: bottle)
+            for row in rows {
+                flat.append(contentsOf: row)
                 flat.append(255)
             }
             return flat
         }
 
         struct Node {
-            let state: [[UInt8]]
+            let state: [Container]
             let parent: Int
             let move: Move
         }
 
+        if start.allSatisfy(\.isSolved) { return [] }
         var nodes = [Node(state: start, parent: -1, move: Move(from: 0, to: 0))]
         var seen: Set<[UInt8]> = [key(start)]
-        if isSolved(start) { return [] }
 
         var head = 0
         while head < nodes.count {
-            let node = nodes[head]
-            let state = node.state
+            let state = nodes[head].state
 
             for from in state.indices {
                 let source = state[from]
-                guard let top = source.last else { continue }
-                let run = source.reversed().prefix { $0 == top }.count
-                let sourceIsPure = run == source.count
+                guard let top = source.topColor else { continue }
+                // Pouring a uniform bottle into an empty one only relocates it.
+                let sourceIsUniform = source.isUniform
 
                 for to in state.indices where to != from {
                     let target = state[to]
-                    guard target.count < capacities[to] else { continue }
-                    if let targetTop = target.last, targetTop != top { continue }
-                    // Pouring a pure bottle into an empty one only relocates it.
-                    if sourceIsPure, target.isEmpty { continue }
+                    guard !target.isFull else { continue }
+                    if let targetTop = target.topColor, targetTop != top { continue }
+                    if sourceIsUniform, target.isEmpty { continue }
 
-                    let amount = min(run, capacities[to] - target.count)
+                    let amount = min(source.topRunLength, target.freeSpace)
                     var next = state
-                    next[from].removeLast(amount)
-                    next[to].append(contentsOf: repeatElement(top, count: amount))
+                    next[from].removeTop(amount)
+                    next[to].addOnTop(top, count: amount)
 
-                    let nextKey = key(next)
-                    guard seen.insert(nextKey).inserted else { continue }
+                    guard seen.insert(key(next)).inserted else { continue }
                     nodes.append(Node(state: next, parent: head, move: Move(from: from, to: to)))
 
-                    if isSolved(next) {
+                    if next.allSatisfy(\.isSolved) {
                         var moves: [Move] = []
                         var cursor = nodes.count - 1
                         while nodes[cursor].parent >= 0 {

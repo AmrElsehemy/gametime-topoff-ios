@@ -17,8 +17,16 @@ public struct SeededGenerator: RandomNumberGenerator, Sendable {
 
 public enum LevelGenerator {
     /// A shuffled board of `colors` bottles' worth of liquid plus `empties` empty bottles.
-    /// No bottle starts already solved. The result is not guaranteed solvable; check with `Solver`.
-    public static func board(seed: UInt64, colors: Int, capacity: Int, empties: Int) -> Board {
+    /// No bottle starts already solved. With `visibleLayers`, only that many top layers of each
+    /// filled bottle are visible; the rest are concealed. The result is not guaranteed solvable;
+    /// check with `Solver`.
+    public static func board(
+        seed: UInt64,
+        colors: Int,
+        capacity: Int,
+        empties: Int,
+        visibleLayers: Int? = nil
+    ) -> Board {
         var rng = SeededGenerator(seed: seed)
         while true {
             var units: [LiquidColor] = []
@@ -30,7 +38,11 @@ public enum LevelGenerator {
             var containers: [Container] = []
             for index in 0..<colors {
                 let slice = Array(units[(index * capacity)..<((index + 1) * capacity)])
-                containers.append(Container(capacity: capacity, layers: slice))
+                containers.append(Container(
+                    capacity: capacity,
+                    layers: slice,
+                    hiddenLayers: visibleLayers.map { capacity - $0 } ?? 0
+                ))
             }
             guard !containers.contains(where: \.isSolved) else { continue }
             for _ in 0..<empties { containers.append(Container(capacity: capacity)) }
