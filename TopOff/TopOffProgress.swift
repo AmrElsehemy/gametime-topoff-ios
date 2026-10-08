@@ -4,9 +4,22 @@ import Foundation
 struct TopOffProgress: Codable, Equatable {
     /// Fewest pours used to solve each level, keyed by level id.
     var bestMoves: [Int: Int] = [:]
+    /// Fewest pours used for each daily puzzle, keyed by `DailyPuzzle` day number.
+    var dailyBest: [Int: Int] = [:]
     var soundOn = true
     var hapticsOn = true
     var symbolsOn = false
+
+    /// Consecutive days solved, ending today, or yesterday if today is still open.
+    func dailyStreak(today: Int) -> Int {
+        var day = dailyBest[today] != nil ? today : today - 1
+        var streak = 0
+        while dailyBest[day] != nil {
+            streak += 1
+            day -= 1
+        }
+        return streak
+    }
 }
 
 @MainActor

@@ -200,4 +200,28 @@ final class TopOffEngineTests: XCTestCase {
         game.restart()
         XCTAssertEqual(game.board.containers.count, before)
     }
+
+    func testDailyPuzzleIsDeterministicSolvableAndFollowsTheWeek() throws {
+        for day in 800..<814 {
+            let first = DailyPuzzle.level(forDay: day)
+            let second = DailyPuzzle.level(forDay: day)
+            XCTAssertEqual(first.board, second.board, "Day \(day) must be the same every time")
+            XCTAssertEqual(first.id, day)
+
+            var game = Game(board: first.board)
+            XCTAssertFalse(game.isSolved)
+            for move in first.solution { try game.pour(move) }
+            XCTAssertTrue(game.isSolved, "Day \(day) solution should solve the board")
+        }
+        XCTAssertNotEqual(DailyPuzzle.level(forDay: 800).board, DailyPuzzle.level(forDay: 801).board)
+    }
+
+    func testDayNumberCountsCalendarDays() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        let jan1 = calendar.date(from: DateComponents(year: 2024, month: 1, day: 1))!
+        XCTAssertEqual(DailyPuzzle.dayNumber(for: jan1, calendar: calendar), 0)
+        let later = calendar.date(from: DateComponents(year: 2024, month: 3, day: 1, hour: 23))!
+        XCTAssertEqual(DailyPuzzle.dayNumber(for: later, calendar: calendar), 60)
+    }
 }
