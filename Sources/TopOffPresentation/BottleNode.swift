@@ -15,6 +15,17 @@ enum TopOffPalette {
         }
     }
 
+    static func lighter(for color: LiquidColor) -> SKColor {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        self.color(for: color).getRed(&r, green: &g, blue: &b, alpha: &a)
+        return SKColor(
+            red: r + (1 - r) * 0.45,
+            green: g + (1 - g) * 0.45,
+            blue: b + (1 - b) * 0.45,
+            alpha: 1
+        )
+    }
+
     static func darker(for color: LiquidColor) -> SKColor {
         var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
         self.color(for: color).getRed(&r, green: &g, blue: &b, alpha: &a)
@@ -32,8 +43,12 @@ final class BottleNode: SKNode {
 
     private let liquidRoot = SKNode()
     private let outline = SKShapeNode()
-    private let surface = SKSpriteNode(color: SKColor(white: 1, alpha: 0.35), size: .zero)
+    private let surface = SKShapeNode()
+    private let shading = SKSpriteNode()
     private var runNodes: [SKSpriteNode] = []
+    private var shadeNodes: [SKSpriteNode] = []
+    private var highlighted = false
+    private var completeColor: LiquidColor?
     private var cap: SKShapeNode?
     private(set) var isComplete = false
 
@@ -66,7 +81,8 @@ final class BottleNode: SKNode {
 
         // Cylindrical shading over the liquid: dark edges, bright core, so flat colour reads as volume.
         if let texture = Self.shadingTexture() {
-            let shading = SKSpriteNode(texture: texture, size: CGSize(width: bodyWidth, height: bodyHeight))
+            shading.texture = texture
+            shading.size = CGSize(width: bodyWidth, height: bodyHeight)
             shading.zPosition = 8
             crop.addChild(shading)
         }
@@ -83,7 +99,12 @@ final class BottleNode: SKNode {
         rim.zPosition = 11
         addChild(rim)
 
-        surface.zPosition = 5
+        surface.path = CGPath(
+            ellipseIn: CGRect(x: -bodyWidth * 0.5, y: -4.5, width: bodyWidth, height: 9),
+            transform: nil
+        )
+        surface.strokeColor = .clear
+        surface.zPosition = 40
         liquidRoot.addChild(surface)
 
         outline.path = path
@@ -132,11 +153,16 @@ final class BottleNode: SKNode {
         while runNodes.count < runs.count {
             let node = SKSpriteNode(color: .white, size: .zero)
             node.anchorPoint = CGPoint(x: 0.5, y: 0)
+            let shade = SKSpriteNode(texture: Self.verticalShadeTexture, color: .white, size: .zero)
+            shade.anchorPoint = CGPoint(x: 0.5, y: 0)
+            node.addChild(shade)
             liquidRoot.addChild(node)
             runNodes.append(node)
+            shadeNodes.append(shade)
         }
         while runNodes.count > runs.count {
             runNodes.removeLast().removeFromParent()
+            shadeNodes.removeLast()
         }
 
         let wide = bodyHeight * 1.4
@@ -149,28 +175,63 @@ final class BottleNode: SKNode {
             node.size = CGSize(width: wide, height: run.height + extra + 0.5)
             node.position = CGPoint(x: 0, y: y - extra)
             node.zPosition = CGFloat(index)
+            shadeNodes[index].size = node.size
             y += run.height
         }
 
         surface.isHidden = runs.isEmpty
-        surface.size = CGSize(width: wide, height: 3)
-        surface.position = CGPoint(x: 0, y: y - 3)
-        surface.anchorPoint = CGPoint(x: 0.5, y: 0)
+        surface.position = CGPoint(x: 0, y: y)
+        if let top = runs.last {
+            surface.fillColor = TopOffPalette.lighter(for: top.color)
+        }
+        let fill = (y + bodyHeight / 2 - 4) / (unit * CGFloat(capacity))
+        shading.alpha = 0.4 + 0.6 * min(max(fill, 0), 1)
+    }
+
+    /// A small post-pour wobble of the liquid surface.
+    func slosh() {
+        liquidRoot.removeAction(forKey: "slosh")
+        let amp: CGFloat = 0.07
+        liquidRoot.run(.sequence([
+            .rotate(toAngle: amp, duration: 0.10),
+            .rotate(toAngle: -amp * 0.6, duration: 0.12),
+            .rotate(toAngle: amp * 0.3, duration: 0.12),
+            .rotate(toAngle: 0, duration: 0.10)
+        ]), withKey: "slosh")
     }
 
     func setTilt(_ angle: CGFloat) {
+        liquidRoot.removeAction(forKey: "slosh")
         zRotation = angle
         liquidRoot.zRotation = -angle
     }
 
     func setHighlighted(_ on: Bool) {
-        outline.strokeColor = SKColor(white: 1, alpha: on ? 1 : 0.55)
-        outline.lineWidth = on ? 3.5 : 2.5
+        highlighted = on
+        updateOutline()
+    }
+
+    private func updateOutline() {
+        if highlighted {
+            outline.strokeColor = SKColor(white: 1, alpha: 1)
+            outline.lineWidth = 3
+            outline.glowWidth = 3
+        } else if let completeColor {
+            outline.strokeColor = TopOffPalette.lighter(for: completeColor)
+            outline.lineWidth = 3
+            outline.glowWidth = 4
+        } else {
+            outline.strokeColor = SKColor(white: 1, alpha: 0.55)
+            outline.lineWidth = 2.5
+            outline.glowWidth = 0
+        }
     }
 
     func setComplete(_ on: Bool, color: LiquidColor?, animated: Bool) {
         guard on != isComplete else { return }
         isComplete = on
+        completeColor = on ? color : nil
+        updateOutline()
         cap?.removeFromParent()
         cap = nil
         guard on, let color else { return }
@@ -205,6 +266,28 @@ final class BottleNode: SKNode {
             ]))
         }
     }
+
+    private static let verticalShadeTexture: SKTexture? = {
+        let space = CGColorSpaceCreateDeviceRGB()
+        guard
+            let context = CGContext(
+                data: nil, width: 4, height: 64, bitsPerComponent: 8, bytesPerRow: 0,
+                space: space, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            ),
+            let gradient = CGGradient(
+                colorsSpace: space,
+                colors: [
+                    CGColor(red: 0, green: 0, blue: 0, alpha: 0.22),
+                    CGColor(red: 0, green: 0, blue: 0, alpha: 0.0),
+                    CGColor(red: 1, green: 1, blue: 1, alpha: 0.16)
+                ] as CFArray,
+                locations: [0, 0.55, 1]
+            )
+        else { return nil }
+        // CGContext origin is bottom-left, matching SpriteKit textures.
+        context.drawLinearGradient(gradient, start: .zero, end: CGPoint(x: 0, y: 64), options: [])
+        return context.makeImage().map { SKTexture(cgImage: $0) }
+    }()
 
     private static func shadingTexture() -> SKTexture? {
         let space = CGColorSpaceCreateDeviceRGB()

@@ -31,7 +31,26 @@ public final class TopOffScene: SKScene {
     private let approachDuration: TimeInterval = 0.22
     private let returnDuration: TimeInterval = 0.2
 
+    private var lastSplash: TimeInterval = 0
+
     public var onSolved: (() -> Void)?
+    /// Reports move count and undo availability whenever either changes.
+    public var onStateChange: ((_ moves: Int, _ canUndo: Bool) -> Void)?
+
+    #if DEBUG
+    private var autoplayMoves: [Move] = []
+    private var nextAutoplay: TimeInterval?
+
+    /// Debug only: plays the reference solution so animations can be inspected without touch input.
+    public func debugAutoplay(_ moves: [Move]) {
+        autoplayMoves = moves
+        nextAutoplay = nil
+    }
+    #endif
+
+    private func notifyState() {
+        onStateChange?(game.moveCount, game.canUndo)
+    }
 
     public init(
         level: TopOffLevel = TopOffLevels.handcrafted[0],
@@ -70,6 +89,7 @@ public final class TopOffScene: SKScene {
         didSolve = false
         activePour = nil
         buildBoard(animated: true)
+        notifyState()
     }
 
     public func undo() {
@@ -77,6 +97,7 @@ public final class TopOffScene: SKScene {
         feedback.play(.undo, soundEnabled: true, hapticsEnabled: true)
         deselectImmediately()
         refreshBottles(animated: true)
+        notifyState()
     }
 
     public func restart() {
@@ -84,6 +105,7 @@ public final class TopOffScene: SKScene {
         game.restart()
         deselectImmediately()
         refreshBottles(animated: true)
+        notifyState()
     }
 
     // MARK: - Input
@@ -125,6 +147,7 @@ public final class TopOffScene: SKScene {
         do {
             let pour = try game.pour(Move(from: from, to: tapped))
             startPour(pour)
+            notifyState()
         } catch {
             feedback.play(.invalidMove, soundEnabled: true, hapticsEnabled: true)
             invalidFeedback(on: tapped)
@@ -188,7 +211,7 @@ public final class TopOffScene: SKScene {
         source.zPosition = 50
 
         let direction: CGFloat = homes[to].x >= homes[from].x ? 1 : -1
-        let tilt = -direction * 0.95
+        let tilt = -direction * 0.8
 
         // Park the lip just above the target's opening, then work out where the body must sit.
         let lipLocal = source.lip(towards: direction)
@@ -225,6 +248,24 @@ public final class TopOffScene: SKScene {
     }
 
     public override func update(_ currentTime: TimeInterval) {
+        #if DEBUG
+        if activePour == nil, selectedIndex == nil, !didSolve, !autoplayMoves.isEmpty {
+            if let due = nextAutoplay {
+                if currentTime >= due {
+                    let move = autoplayMoves.removeFirst()
+                    handleTap(onContainer: move.from)
+                    run(.sequence([
+                        .wait(forDuration: 0.35),
+                        .run { [weak self] in self?.handleTap(onContainer: move.to) }
+                    ]))
+                    nextAutoplay = currentTime + 2.2
+                }
+            } else {
+                nextAutoplay = currentTime + 1.2
+            }
+        }
+        #endif
+
         guard var animation = activePour else { return }
         if animation.startTime == nil { animation.startTime = currentTime }
         let t = currentTime - (animation.startTime ?? currentTime)
@@ -277,6 +318,10 @@ public final class TopOffScene: SKScene {
         target.setLayers(targetLayers, partialTop: pour.amount, factor: progress)
 
         updateStream(animation, source: source, target: target, angle: angle, progress: progress, t: t, flow: flow)
+        if progress > 0.02, progress < 0.98, currentTime - lastSplash > 0.05 {
+            lastSplash = currentTime
+            spawnSplash(animation, target: target, progress: progress)
+        }
         activePour = animation
     }
 
@@ -311,6 +356,37 @@ public final class TopOffScene: SKScene {
         animation.stream.alpha = 1
     }
 
+    private func spawnSplash(_ animation: PourAnimation, target: BottleNode, progress: CGFloat) {
+        let container = game.board.containers[animation.pour.move.to]
+        let units = CGFloat(container.layers.count - animation.pour.amount)
+            + CGFloat(animation.pour.amount) * progress
+        let home = homes[animation.pour.move.to]
+        let surfaceY = home.y - target.bodyHeight / 2 + 4 + units * target.unit
+
+        for _ in 0..<2 {
+            let radius = CGFloat.random(in: 1.8...3.6)
+            let drop = SKShapeNode(circleOfRadius: radius)
+            drop.fillColor = TopOffPalette.lighter(for: animation.pour.color)
+            drop.strokeColor = .clear
+            drop.position = CGPoint(x: home.x + CGFloat.random(in: -6...6), y: surfaceY + 3)
+            drop.zPosition = 46
+            addChild(drop)
+            let rise = SKAction.moveBy(
+                x: CGFloat.random(in: -16...16),
+                y: CGFloat.random(in: 12...26),
+                duration: 0.18
+            )
+            rise.timingMode = .easeOut
+            let fall = SKAction.moveBy(x: 0, y: -14, duration: 0.14)
+            fall.timingMode = .easeIn
+            drop.run(.sequence([
+                rise,
+                .group([fall, .fadeOut(withDuration: 0.14)]),
+                .removeFromParent()
+            ]))
+        }
+    }
+
     private func finishPour(_ animation: PourAnimation) {
         let pour = animation.pour
         animation.stream.removeFromParent()
@@ -321,6 +397,8 @@ public final class TopOffScene: SKScene {
         source.setTilt(0)
         source.zPosition = 10
         refreshBottles(animated: true)
+        source.slosh()
+        bottles[pour.move.to].slosh()
 
         if game.isSolved {
             didSolve = true
@@ -369,7 +447,7 @@ public final class TopOffScene: SKScene {
         let tallest = CGFloat(containers.map(\.capacity).max() ?? 3) * width * 0.8 + width * 0.56
         let rowGap: CGFloat = 40
         let boardHeight = CGFloat(rows) * tallest + CGFloat(rows - 1) * rowGap
-        let topY = size.height / 2 - 14 + boardHeight / 2
+        let topY = size.height / 2 - 40 + boardHeight / 2
 
         for (index, container) in containers.enumerated() {
             let row = index / columns
@@ -470,6 +548,30 @@ public final class TopOffScene: SKScene {
         background.position = CGPoint(x: size.width / 2, y: size.height / 2)
         background.zPosition = -10
         addChild(background)
+        addBokeh()
+    }
+
+    /// Soft drifting lights behind the board; positions are deterministic so relayout never flickers.
+    private func addBokeh() {
+        for index in 0..<14 {
+            let seed = CGFloat(index)
+            let radius = 14 + 26 * abs(sin(seed * 12.9898))
+            let orb = SKShapeNode(circleOfRadius: radius)
+            orb.fillColor = TopOffPalette.color(for: LiquidColor(index % 6 + 1))
+            orb.strokeColor = .clear
+            orb.alpha = 0.035 + 0.04 * abs(sin(seed * 4.1))
+            orb.position = CGPoint(
+                x: size.width * abs(sin(seed * 78.233)),
+                y: size.height * abs(sin(seed * 37.719))
+            )
+            orb.zPosition = -9
+            addChild(orb)
+            let drift = 14 + 18 * abs(sin(seed * 9.1))
+            let period = 5 + 4 * abs(sin(seed * 2.3))
+            let up = SKAction.moveBy(x: 0, y: drift, duration: period)
+            up.timingMode = .easeInEaseOut
+            orb.run(.repeatForever(.sequence([up, up.reversed()])))
+        }
     }
 
     // MARK: - Celebration
