@@ -34,6 +34,11 @@ public struct Board: Equatable, Codable, Sendable {
 
     public var isSolved: Bool { containers.allSatisfy(\.isSolved) }
 
+    /// Appends an empty bottle. It goes last so indices held by recorded pours stay valid.
+    public mutating func addEmptyContainer(capacity: Int) {
+        containers.append(Container(capacity: capacity))
+    }
+
     /// How much liquid `move` would transfer, or why it is illegal.
     public func validate(_ move: Move) throws -> Int {
         guard containers.indices.contains(move.from), containers.indices.contains(move.to) else {

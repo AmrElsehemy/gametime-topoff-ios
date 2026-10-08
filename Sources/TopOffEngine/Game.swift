@@ -28,6 +28,12 @@ public struct Game: Sendable {
         return pour
     }
 
+    /// Adds a spare empty bottle for this attempt. `restart()` removes it again.
+    public mutating func addExtraContainer() {
+        let capacity = board.containers.map(\.capacity).max() ?? 1
+        board.addEmptyContainer(capacity: capacity)
+    }
+
     public mutating func restart() {
         board = initialBoard
         history.removeAll()
