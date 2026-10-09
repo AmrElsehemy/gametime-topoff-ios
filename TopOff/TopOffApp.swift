@@ -59,11 +59,11 @@ private struct TopOffRootView: View {
 
             if shell.showTitle {
                 VStack(spacing: 6) {
-                    Text(shell.isDaily ? "TODAY'S" : "LEVEL")
+                    Text(shell.isDaily ? "TODAY'S" : (shell.isEndless ? "ENDLESS" : "LEVEL"))
                         .font(.system(size: 15, weight: .heavy, design: .rounded))
                         .tracking(5)
                         .foregroundStyle(.white.opacity(0.6))
-                    Text(shell.isDaily ? "Daily" : "\(shell.levelNumber)")
+                    Text(shell.isDaily ? "Daily" : "\(shell.endlessNumber ?? shell.levelNumber)")
                         .font(.system(size: 88, weight: .black, design: .rounded))
                         .foregroundStyle(.white)
                     if shell.levelHasHiddenLayers {
@@ -185,6 +185,11 @@ private struct TopOffRootView: View {
                         Label("Streak \(shell.dailyStreak)", systemImage: "flame.fill")
                             .font(.system(size: 11, weight: .bold, design: .rounded))
                             .foregroundStyle(.orange)
+                            .frame(height: 7 + 8)
+                    } else if let number = shell.endlessNumber {
+                        Label("Level \(number)", systemImage: "infinity")
+                            .font(.system(size: 11, weight: .bold, design: .rounded))
+                            .foregroundStyle(.mint)
                             .frame(height: 7 + 8)
                     } else {
                         HStack(spacing: 6) {
@@ -417,6 +422,8 @@ private struct TopOffMenuView: View {
 
                 dailyCard
 
+                endlessCard
+
                 LazyVGrid(columns: columns, spacing: 12) {
                     ForEach(0..<shell.levelCount, id: \.self) { index in
                         levelTile(index)
@@ -495,6 +502,51 @@ private struct TopOffMenuView: View {
         .accessibilityLabel("Daily puzzle, \(shell.dailyStreak) day streak")
     }
 
+    private var endlessCard: some View {
+        Button {
+            shell.playEndless()
+        } label: {
+            HStack(spacing: 14) {
+                Image(systemName: "infinity")
+                    .font(.system(size: 26, weight: .bold))
+                    .foregroundStyle(.mint)
+                    .frame(width: 44)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Endless")
+                        .font(.system(size: 18, weight: .heavy, design: .rounded))
+                    Text("One new board after another")
+                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.6))
+                }
+                Spacer()
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(shell.endlessReached == 0 ? "Start" : "Level \(shell.nextEndlessNumber)")
+                        .font(.system(size: 16, weight: .bold, design: .rounded))
+                        .foregroundStyle(.mint)
+                    Text(shell.endlessReached == 0 ? "" : "\(shell.endlessReached) solved")
+                        .font(.system(size: 10, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.45))
+                }
+            }
+            .foregroundStyle(.white)
+            .padding(16)
+            .background(
+                LinearGradient(
+                    colors: [.mint.opacity(0.20), .mint.opacity(0.06)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                ),
+                in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(.mint.opacity(0.35), lineWidth: 1)
+            }
+        }
+        .buttonStyle(PressableStyle())
+        .accessibilityLabel("Endless mode, next is level \(shell.nextEndlessNumber)")
+    }
+
     private func levelTile(_ index: Int) -> some View {
         let unlocked = shell.isUnlocked(index)
         let stars = shell.stars(forLevelAt: index)
@@ -564,6 +616,7 @@ private final class TopOffShellModel: ObservableObject {
     @Published private(set) var result: Result?
     @Published private(set) var progress: TopOffProgress
     @Published private(set) var dailyLevel: TopOffLevel?
+    @Published private(set) var endlessNumber: Int?
     @Published private(set) var isStuck = false
     @Published private(set) var bottleAccessibility: [BottleAccessibility] = []
     @Published private(set) var privacyOptionsRequired = false
@@ -581,8 +634,20 @@ private final class TopOffShellModel: ObservableObject {
     var levelNumber: Int { min(levelIndex + 1, levels.count) }
     var levelCount: Int { levels.count }
     var isDaily: Bool { dailyLevel != nil }
-    var levelLabel: String { isDaily ? "DAILY" : "LEVEL \(levelNumber)" }
-    var currentLevel: TopOffLevel { dailyLevel ?? levels[levelIndex] }
+    var isEndless: Bool { endlessNumber != nil }
+    var levelLabel: String {
+        if isDaily { return "DAILY" }
+        if isEndless { return "ENDLESS" }
+        return "LEVEL \(levelNumber)"
+    }
+    var currentLevel: TopOffLevel {
+        if let dailyLevel { return dailyLevel }
+        if let endlessNumber { return EndlessPuzzle.level(number: endlessNumber) }
+        return levels[levelIndex]
+    }
+    /// The endless level the menu resumes at.
+    var nextEndlessNumber: Int { progress.endlessReached + 1 }
+    var endlessReached: Int { progress.endlessReached }
     var levelHasHiddenLayers: Bool { currentLevel.hasHiddenLayers }
 
     private var today: Int { DailyPuzzle.dayNumber(for: Date()) }
@@ -604,6 +669,7 @@ private final class TopOffShellModel: ObservableObject {
             }
             let today = DailyPuzzle.dayNumber(for: Date())
             for offset in 1...4 { progress.dailyBest[today - offset] = 12 }
+            for number in 1...5 { progress.endlessBest[number] = 10 }
         }
         #endif
         self.progress = progress
@@ -647,6 +713,11 @@ private final class TopOffShellModel: ObservableObject {
         #if DEBUG
         if ProcessInfo.processInfo.environment["TOPOFF_MENU"] != nil { showMenu = true }
         if ProcessInfo.processInfo.environment["TOPOFF_DAILY"] != nil { playDaily() }
+        if let raw = ProcessInfo.processInfo.environment["TOPOFF_ENDLESS"], let n = Int(raw) {
+            dailyLevel = nil
+            endlessNumber = max(1, n)
+            loadCurrentLevel()
+        }
         if ProcessInfo.processInfo.environment["TOPOFF_AUTOHINT"] != nil {
             Task { [weak self] in
                 try? await Task.sleep(for: .seconds(6))
@@ -803,7 +874,19 @@ private final class TopOffShellModel: ObservableObject {
             didFinishPrototype = false
             result = nil
         }
+        endlessNumber = nil
         dailyLevel = DailyPuzzle.level(forDay: today)
+        loadCurrentLevel()
+    }
+
+    func playEndless() {
+        showMenu = false
+        withAnimation(.spring(duration: 0.3)) {
+            didFinishPrototype = false
+            result = nil
+        }
+        dailyLevel = nil
+        endlessNumber = nextEndlessNumber
         loadCurrentLevel()
     }
 
@@ -811,6 +894,7 @@ private final class TopOffShellModel: ObservableObject {
         guard isUnlocked(index) else { return }
         showMenu = false
         dailyLevel = nil
+        endlessNumber = nil
         withAnimation(.spring(duration: 0.3)) {
             didFinishPrototype = false
             result = nil
@@ -830,13 +914,23 @@ private final class TopOffShellModel: ObservableObject {
     private func handleSolved(moves: Int) {
         let level = currentLevel
         let daily = isDaily
-        let previousBest = daily ? progress.dailyBest[level.id] : progress.bestMoves[level.id]
+        let endless = endlessNumber
+        let previousBest: Int?
+        if daily {
+            previousBest = progress.dailyBest[level.id]
+        } else if let endless {
+            previousBest = progress.endlessBest[endless]
+        } else {
+            previousBest = progress.bestMoves[level.id]
+        }
         let isBest = previousBest.map { moves < $0 } ?? true
         if isBest {
             update {
                 if daily {
                     // Key by the puzzle's own day so a puzzle opened before midnight still counts for its day.
                     $0.dailyBest[level.id] = moves
+                } else if let endless {
+                    $0.endlessBest[endless] = moves
                 } else {
                     $0.bestMoves[level.id] = moves
                 }
@@ -851,6 +945,9 @@ private final class TopOffShellModel: ObservableObject {
             withAnimation(.easeIn(duration: 0.2)) { self?.result = nil }
             if daily {
                 self?.leaveDaily()
+            } else if let endless {
+                self?.endlessNumber = endless + 1
+                self?.loadCurrentLevel()
             } else {
                 self?.advance()
             }

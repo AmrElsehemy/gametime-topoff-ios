@@ -275,5 +275,30 @@ final class TopOffEngineTests: XCTestCase {
         for move in level.solution { try? done.pour(move) }
         XCTAssertEqual(Solver.analyze(done.board), .solvable([]))
     }
+
+    func testEndlessLevelsAreDeterministicSolvableAndDistinct() throws {
+        for number in [1, 2, 7, 8, 50, 364, 365] {
+            let level = EndlessPuzzle.level(number: number)
+            XCTAssertEqual(level.board, EndlessPuzzle.level(number: number).board)
+            XCTAssertEqual(level.id, EndlessPuzzle.idBase + number)
+
+            var game = Game(board: level.board)
+            for move in level.solution { try game.pour(move) }
+            XCTAssertTrue(game.isSolved, "Endless level \(number) should be solvable")
+        }
+        XCTAssertNotEqual(EndlessPuzzle.level(number: 1).board, EndlessPuzzle.level(number: 2).board)
+        XCTAssertNotEqual(EndlessPuzzle.level(number: 1).board, EndlessPuzzle.level(number: 8).board,
+                          "Each set of seven starts on fresh boards")
+        XCTAssertEqual(EndlessPuzzle.level(number: 0).id, EndlessPuzzle.idBase + 1, "Numbers below 1 clamp to level 1")
+    }
+
+    func testEndlessRhythmBuildsThroughEachSetOfSeven() {
+        // Level 1 is the gentle 3-colour board, level 7 the concealed 6-colour finale of the set.
+        XCTAssertEqual(EndlessPuzzle.level(number: 1).board.containers.count, 4)
+        XCTAssertFalse(EndlessPuzzle.level(number: 1).hasHiddenLayers)
+        XCTAssertTrue(EndlessPuzzle.level(number: 7).hasHiddenLayers)
+        XCTAssertEqual(EndlessPuzzle.level(number: 7).board.containers.count, 8)
+        XCTAssertEqual(EndlessPuzzle.level(number: 8).board.containers.count, 4, "A new set starts gently again")
+    }
 }
 
