@@ -218,6 +218,11 @@ public final class TopOffScene: SKScene {
 
     // MARK: - Boosters
 
+    /// Whether a hint can be shown right now, so the player is never asked to earn one that cannot work.
+    public var hintAvailable: Bool {
+        activePour == nil && !didSolve && Solver.solve(game.board, stateLimit: 400_000) != nil
+    }
+
     /// Highlights the next move of a shortest solution from the current position.
     /// Returns false if there is nothing to suggest (solved, mid-pour, or no solution from here).
     @discardableResult

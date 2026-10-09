@@ -1,6 +1,8 @@
 import SpriteKit
+import OSLog
 import SwiftUI
 import TopOffEngine
+import TopOffMonetization
 import TopOffPresentation
 import GameTimeExperience
 
@@ -73,6 +75,20 @@ private struct TopOffRootView: View {
             }
         }
         .preferredColorScheme(.dark)
+        .alert(
+            shell.boosterPrompt == .extraBottle ? "Need more room?" : "Need a hint?",
+            isPresented: Binding(
+                get: { shell.boosterPrompt != nil },
+                set: { if !$0 { shell.cancelBooster() } }
+            )
+        ) {
+            Button("Watch Video") { shell.confirmBooster() }
+            Button("Not Now", role: .cancel) {}
+        } message: {
+            Text(shell.boosterPrompt == .extraBottle
+                 ? "Watch a short video to add one extra bottle."
+                 : "Watch a short video to see the next move.")
+        }
         .sheet(isPresented: $shell.showMenu) {
             TopOffMenuView(shell: shell)
                 .presentationDetents([.large])
@@ -141,8 +157,16 @@ private struct TopOffRootView: View {
 
     private var bottomBar: some View {
         HStack(spacing: 18) {
-            labelledButton(systemName: "lightbulb.fill", title: "Hint", enabled: !shell.didFinishPrototype, action: shell.hint)
-            labelledButton(systemName: "plus.square.fill", title: "Bottle", enabled: shell.canAddBottle && !shell.didFinishPrototype, action: shell.addBottle)
+            labelledButton(
+                systemName: "lightbulb.fill", title: "Hint",
+                enabled: !shell.didFinishPrototype && !shell.boosterBusy,
+                adBadge: shell.boostersUseAds, action: shell.hint
+            )
+            labelledButton(
+                systemName: "plus.square.fill", title: "Bottle",
+                enabled: shell.canAddBottle && !shell.didFinishPrototype && !shell.boosterBusy,
+                adBadge: shell.boostersUseAds, action: shell.addBottle
+            )
             labelledButton(systemName: "square.grid.3x3.fill", title: "Levels", enabled: true) {
                 shell.showMenu = true
             }
@@ -245,6 +269,7 @@ private struct TopOffRootView: View {
         systemName: String,
         title: String,
         enabled: Bool,
+        adBadge: Bool = false,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
@@ -254,6 +279,17 @@ private struct TopOffRootView: View {
                     .frame(width: 52, height: 52)
                     .background(.ultraThinMaterial, in: Circle())
                     .overlay { Circle().stroke(.white.opacity(0.14), lineWidth: 1) }
+                    .overlay(alignment: .topTrailing) {
+                        if adBadge {
+                            // Marks a booster that is earned by watching a video.
+                            Image(systemName: "play.fill")
+                                .font(.system(size: 8, weight: .black))
+                                .foregroundStyle(.black)
+                                .frame(width: 18, height: 18)
+                                .background(.yellow, in: Circle())
+                                .offset(x: 4, y: -2)
+                        }
+                    }
                 Text(title)
                     .font(.system(size: 11, weight: .bold, design: .rounded))
                     .foregroundStyle(.white.opacity(0.7))
@@ -264,7 +300,7 @@ private struct TopOffRootView: View {
         .disabled(!enabled)
         .opacity(enabled ? 1 : 0.35)
         .animation(.easeOut(duration: 0.2), value: enabled)
-        .accessibilityLabel(title)
+        .accessibilityLabel(adBadge ? "\(title), watch a video to use" : title)
     }
 }
 
@@ -314,6 +350,12 @@ private struct TopOffMenuView: View {
                 }
                 .padding(.horizontal, 16)
                 .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+
+                if shell.privacyOptionsRequired {
+                    Button("Ad privacy choices") { shell.showPrivacyOptions() }
+                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.8))
+                }
 
                 Text("Colour symbols draw a shape on each colour so the puzzle never depends on colour alone.")
                     .font(.system(size: 12, weight: .medium, design: .rounded))
@@ -440,10 +482,16 @@ private final class TopOffShellModel: ObservableObject {
     @Published private(set) var result: Result?
     @Published private(set) var progress: TopOffProgress
     @Published private(set) var dailyLevel: TopOffLevel?
+    @Published private(set) var privacyOptionsRequired = false
+    @Published private(set) var boosterBusy = false
+    @Published var boosterPrompt: TopOffBooster?
     @Published var showMenu = false
 
     private let levels = TopOffLevels.campaign
     private let store = TopOffProgressStore()
+    private static let log = Logger(subsystem: "ai.knowlly.topoff", category: "boosters")
+    private let ads: TopOffAds
+    private let boosters: TopOffBoosterService
     private let feedback = GameFeedbackController(
         audio: TopOffAudioController(),
         haptics: TopOffHapticsController()
@@ -468,6 +516,13 @@ private final class TopOffShellModel: ObservableObject {
         let progress = store.load()
         self.progress = progress
 
+        let ads = TopOffAds()
+        self.ads = ads
+        self.boosters = TopOffBoosterService(
+            provider: ads.provider,
+            receipts: UserDefaultsRewardReceiptStore()
+        )
+
         var startIndex = 0
         for (index, level) in TopOffLevels.campaign.enumerated() {
             if progress.bestMoves[level.id] == nil { startIndex = index; break }
@@ -490,9 +545,19 @@ private final class TopOffShellModel: ObservableObject {
         }
         #endif
         flashTitle()
+        Task { [weak self] in
+            await ads.prepare()
+            self?.privacyOptionsRequired = ads.privacyOptionsRequired
+        }
         #if DEBUG
         if ProcessInfo.processInfo.environment["TOPOFF_MENU"] != nil { showMenu = true }
         if ProcessInfo.processInfo.environment["TOPOFF_DAILY"] != nil { playDaily() }
+        if ProcessInfo.processInfo.environment["TOPOFF_AUTOHINT"] != nil {
+            Task { [weak self] in
+                try? await Task.sleep(for: .seconds(6))
+                self?.hint()
+            }
+        }
         #endif
     }
 
@@ -559,8 +624,78 @@ private final class TopOffShellModel: ObservableObject {
 
     func undo() { scene.undo() }
     func restart() { scene.restart() }
-    func hint() { scene.showHint() }
-    func addBottle() { scene.addExtraBottle() }
+    // MARK: Boosters
+
+    /// The first levels teach the game, so they never involve ads.
+    private var isOnboarding: Bool {
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["TOPOFF_SKIP_ONBOARDING"] != nil { return false }
+        #endif
+        return progress.bestMoves.count < 2
+    }
+
+    /// Whether the booster buttons should carry the "watch a video" badge.
+    var boostersUseAds: Bool { ads.isConfigured && !isOnboarding }
+
+    func hint() { requestBooster(.hint) }
+    func addBottle() { requestBooster(.extraBottle) }
+
+    func confirmBooster() {
+        guard let booster = boosterPrompt else { return }
+        boosterPrompt = nil
+        Task { await grant(booster) }
+    }
+
+    func cancelBooster() { boosterPrompt = nil }
+
+    func showPrivacyOptions() {
+        Task { await ads.presentPrivacyOptions() }
+    }
+
+    private func boosterKey(_ booster: TopOffBooster) -> String {
+        "\(booster.rawValue)-\(currentLevel.id)"
+    }
+
+    private func boosterContext(for booster: TopOffBooster) -> BoosterContext {
+        BoosterContext(
+            levelID: currentLevel.id,
+            sequence: (progress.boosterUses[boosterKey(booster)] ?? 0) + 1,
+            isOnboarding: isOnboarding,
+            canRequestAds: ads.canRequestAds
+        )
+    }
+
+    private func requestBooster(_ booster: TopOffBooster) {
+        guard !boosterBusy, boosterPrompt == nil else { return }
+        // Never ask for a video to earn something that cannot work.
+        switch booster {
+        case .hint: guard scene.hintAvailable else { return }
+        case .extraBottle: guard canAddBottle else { return }
+        }
+        Task {
+            let ready = await boosters.isAdReady(for: booster, context: boosterContext(for: booster))
+            Self.log.info("booster \(booster.rawValue, privacy: .public): adReady=\(ready) canRequestAds=\(self.ads.canRequestAds) onboarding=\(self.isOnboarding)")
+            if ready {
+                boosterPrompt = booster
+            } else {
+                await grant(booster)
+            }
+        }
+    }
+
+    private func grant(_ booster: TopOffBooster) async {
+        boosterBusy = true
+        defer { boosterBusy = false }
+        let outcome = await boosters.request(booster, context: boosterContext(for: booster))
+        Self.log.info("booster \(booster.rawValue, privacy: .public) outcome: \(String(describing: outcome), privacy: .public)")
+        guard outcome.isGranted else { return }
+        let key = boosterKey(booster)
+        update { $0.boosterUses[key, default: 0] += 1 }
+        switch booster {
+        case .hint: scene.showHint()
+        case .extraBottle: scene.addExtraBottle()
+        }
+    }
 
     func playDaily() {
         showMenu = false

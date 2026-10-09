@@ -107,6 +107,6 @@ At the end of the build, record for each row: **reused as-is / reused with chang
 
 - Mechanic family is frozen as **stack / container** for Game #002; the earlier path-engine idea is superseded for #002 and remains available for a future title.
 - App Store name and trademark check for "Top Off", and bundle ID `topoff`.
-- Rewarded "extra container": a new `MonetizationPlacement` or a variant of `rewardedContinue`?
-- Which ad network, and is it already integrated for #001?
+- ~~Rewarded "extra container": a new placement or a variant of `rewardedContinue`?~~ Resolved: it reuses `rewardedContinue`; no new placement needed.
+- ~~Which ad network?~~ Resolved: Google AdMob, as decided in Exactly One's PRD. The shared adapter is `GameTimeAdMob` in GameTimeKit; Top Off consumes it through `TopOffMonetization`.
 - Does #001 already have a persistent receipt store, save format or tutorial scaffold that #002 should adopt or extract from first?
