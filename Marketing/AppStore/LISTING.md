@@ -29,13 +29,13 @@ Tap a bottle, tap another, and watch the liquid flow. Pour matching colours toge
 
 - Hand-tuned levels that build from gentle to genuinely tricky
 - Hidden colours that reveal as you pour, for a fresh kind of challenge
-- A new Daily Puzzle every day, with a streak to keep
+- A new Daily Puzzle every day, with a streak to keep, plus an Endless mode that never runs out of boards
 - Earn up to three stars on every level
-- Hints and an extra bottle when you are stuck
+- Hints and an extra bottle when you are stuck, and a gentle nudge if a board can no longer be finished
 - Undo and restart, always free
 - No timers and no pressure: take as long as you like
 - Works completely offline
-- Colour-blind friendly: turn on shapes for every colour
+- Made to be accessible: VoiceOver support, Reduce Motion support, and shapes for every colour
 - Satisfying haptics and sound, each with its own switch
 
 ## Screenshots (iPhone 6.9")
