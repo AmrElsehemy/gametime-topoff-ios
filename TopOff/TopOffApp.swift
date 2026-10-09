@@ -45,7 +45,7 @@ private struct TopOffRootView: View {
                 }
                 if shell.levelIndex == 0, !shell.isDaily, shell.moves == 0, !shell.didFinishPrototype {
                     Text("Tap a bottle, then tap another to pour")
-                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .scaledFont(14, .semibold)
                         .foregroundStyle(.white.opacity(0.6))
                         .padding(.horizontal, 16)
                         .padding(.vertical, 9)
@@ -60,15 +60,15 @@ private struct TopOffRootView: View {
             if shell.showTitle {
                 VStack(spacing: 6) {
                     Text(shell.isDaily ? "TODAY'S" : (shell.isEndless ? "ENDLESS" : "LEVEL"))
-                        .font(.system(size: 15, weight: .heavy, design: .rounded))
+                        .scaledFont(15, .heavy)
                         .tracking(5)
                         .foregroundStyle(.white.opacity(0.6))
                     Text(shell.isDaily ? "Daily" : "\(shell.endlessNumber ?? shell.levelNumber)")
-                        .font(.system(size: 88, weight: .black, design: .rounded))
+                        .scaledFont(88, .black)
                         .foregroundStyle(.white)
                     if shell.levelHasHiddenLayers {
                         Text("Some colours are hidden")
-                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                            .scaledFont(14, .semibold)
                             .foregroundStyle(.white.opacity(0.7))
                     }
                 }
@@ -89,6 +89,8 @@ private struct TopOffRootView: View {
             }
         }
         .preferredColorScheme(.dark)
+        // Text grows with Dynamic Type, but is capped so the fixed-height bars never break.
+        .dynamicTypeSize(...DynamicTypeSize.accessibility2)
         .alert(
             shell.boosterPrompt == .extraBottle ? "Need more room?" : "Need a hint?",
             isPresented: Binding(
@@ -139,9 +141,9 @@ private struct TopOffRootView: View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Can't be finished")
-                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                    .scaledFont(14, .bold)
                 Text("Undo a few moves or restart")
-                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .scaledFont(11, .medium)
                     .foregroundStyle(.white.opacity(0.65))
             }
             Spacer(minLength: 4)
@@ -177,18 +179,18 @@ private struct TopOffRootView: View {
             } label: {
                 VStack(spacing: 8) {
                     Text(shell.levelLabel)
-                        .font(.system(size: 15, weight: .heavy, design: .rounded))
+                        .scaledFont(15, .heavy)
                         .tracking(3)
                         .foregroundStyle(.white)
 
                     if shell.isDaily {
                         Label("Streak \(shell.dailyStreak)", systemImage: "flame.fill")
-                            .font(.system(size: 11, weight: .bold, design: .rounded))
+                            .scaledFont(11, .bold)
                             .foregroundStyle(.orange)
                             .frame(height: 7 + 8)
                     } else if let number = shell.endlessNumber {
                         Label("Level \(number)", systemImage: "infinity")
-                            .font(.system(size: 11, weight: .bold, design: .rounded))
+                            .scaledFont(11, .bold)
                             .foregroundStyle(.mint)
                             .frame(height: 7 + 8)
                     } else {
@@ -203,7 +205,7 @@ private struct TopOffRootView: View {
                     }
 
                     Text(shell.moves == 1 ? "1 move" : "\(shell.moves) moves")
-                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .scaledFont(12, .semibold)
                         .foregroundStyle(.white.opacity(0.5))
                         .contentTransition(.numericText())
                         .animation(.snappy, value: shell.moves)
@@ -260,7 +262,7 @@ private struct TopOffRootView: View {
                 }
             }
             Text(result.isBest ? "New best · \(result.moves) moves" : "\(result.moves) moves")
-                .font(.system(size: 15, weight: .bold, design: .rounded))
+                .scaledFont(15, .bold)
                 .foregroundStyle(.white.opacity(0.85))
         }
         .padding(.horizontal, 26)
@@ -280,9 +282,9 @@ private struct TopOffRootView: View {
                 .font(.system(size: 34, weight: .bold))
                 .foregroundStyle(.yellow)
             Text("All topped off")
-                .font(.system(size: 28, weight: .heavy, design: .rounded))
+                .scaledFont(28, .heavy)
             Text("\(shell.totalStars) of \(shell.levelCount * 3) stars")
-                .font(.system(size: 15, weight: .medium, design: .rounded))
+                .scaledFont(15, .medium)
                 .foregroundStyle(.white.opacity(0.65))
 
             Button {
@@ -290,7 +292,7 @@ private struct TopOffRootView: View {
                 shell.dismissFinish()
             } label: {
                 Text("Pick a Level")
-                    .font(.system(size: 17, weight: .bold, design: .rounded))
+                    .scaledFont(17, .bold)
                     .foregroundStyle(.black)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
@@ -301,7 +303,7 @@ private struct TopOffRootView: View {
             Button("Play from the Start") {
                 shell.playAgain()
             }
-            .font(.system(size: 15, weight: .semibold, design: .rounded))
+            .scaledFont(15, .semibold)
             .foregroundStyle(.white.opacity(0.75))
         }
         .foregroundStyle(.white)
@@ -364,7 +366,7 @@ private struct TopOffRootView: View {
                         }
                     }
                 Text(title)
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .scaledFont(11, .bold)
                     .foregroundStyle(.white.opacity(0.7))
             }
             .foregroundStyle(.white)
@@ -377,12 +379,34 @@ private struct TopOffRootView: View {
     }
 }
 
+/// Rounded system text that grows with the player's Dynamic Type setting. At the default size it
+/// is identical to a fixed `size`, so the layout is unchanged.
+private struct ScaledFont: ViewModifier {
+    @ScaledMetric private var size: CGFloat
+    private let weight: Font.Weight
+
+    init(size: CGFloat, weight: Font.Weight) {
+        _size = ScaledMetric(wrappedValue: size, relativeTo: .body)
+        self.weight = weight
+    }
+
+    func body(content: Content) -> some View {
+        content.font(.system(size: size, weight: weight, design: .rounded))
+    }
+}
+
+private extension View {
+    func scaledFont(_ size: CGFloat, _ weight: Font.Weight = .regular) -> some View {
+        modifier(ScaledFont(size: size, weight: weight))
+    }
+}
+
 private struct BannerButtonStyle: ButtonStyle {
     let prominent: Bool
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: 14, weight: .bold, design: .rounded))
+            .scaledFont(14, .bold)
             .foregroundStyle(prominent ? Color.black : Color.white)
             .padding(.horizontal, 14)
             .padding(.vertical, 7)
@@ -413,10 +437,10 @@ private struct TopOffMenuView: View {
             VStack(alignment: .leading, spacing: 26) {
                 HStack {
                     Text("Levels")
-                        .font(.system(size: 28, weight: .heavy, design: .rounded))
+                        .scaledFont(28, .heavy)
                     Spacer()
                     Label("\(shell.totalStars)", systemImage: "star.fill")
-                        .font(.system(size: 16, weight: .bold, design: .rounded))
+                        .scaledFont(16, .bold)
                         .foregroundStyle(.yellow)
                 }
 
@@ -442,12 +466,12 @@ private struct TopOffMenuView: View {
 
                 if shell.privacyOptionsRequired {
                     Button("Ad privacy choices") { shell.showPrivacyOptions() }
-                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        .scaledFont(15, .semibold)
                         .foregroundStyle(.white.opacity(0.8))
                 }
 
                 Text("Colour symbols draw a shape on each colour so the puzzle never depends on colour alone.")
-                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .scaledFont(12, .medium)
                     .foregroundStyle(.white.opacity(0.45))
             }
             .padding(22)
@@ -468,18 +492,18 @@ private struct TopOffMenuView: View {
                     .frame(width: 44)
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Daily Puzzle")
-                        .font(.system(size: 18, weight: .heavy, design: .rounded))
+                        .scaledFont(18, .heavy)
                     Text(solved.map { "Solved in \($0) moves" } ?? "A new board every day")
-                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                        .scaledFont(13, .medium)
                         .foregroundStyle(.white.opacity(0.6))
                 }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 2) {
                     Label("\(shell.dailyStreak)", systemImage: "flame.fill")
-                        .font(.system(size: 16, weight: .bold, design: .rounded))
+                        .scaledFont(16, .bold)
                         .foregroundStyle(.orange)
                     Text("day streak")
-                        .font(.system(size: 10, weight: .semibold, design: .rounded))
+                        .scaledFont(10, .semibold)
                         .foregroundStyle(.white.opacity(0.45))
                 }
             }
@@ -513,18 +537,18 @@ private struct TopOffMenuView: View {
                     .frame(width: 44)
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Endless")
-                        .font(.system(size: 18, weight: .heavy, design: .rounded))
+                        .scaledFont(18, .heavy)
                     Text("One new board after another")
-                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                        .scaledFont(13, .medium)
                         .foregroundStyle(.white.opacity(0.6))
                 }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 2) {
                     Text(shell.endlessReached == 0 ? "Start" : "Level \(shell.nextEndlessNumber)")
-                        .font(.system(size: 16, weight: .bold, design: .rounded))
+                        .scaledFont(16, .bold)
                         .foregroundStyle(.mint)
                     Text(shell.endlessReached == 0 ? "" : "\(shell.endlessReached) solved")
-                        .font(.system(size: 10, weight: .semibold, design: .rounded))
+                        .scaledFont(10, .semibold)
                         .foregroundStyle(.white.opacity(0.45))
                 }
             }
@@ -556,7 +580,7 @@ private struct TopOffMenuView: View {
             VStack(spacing: 6) {
                 if unlocked {
                     Text("\(index + 1)")
-                        .font(.system(size: 24, weight: .black, design: .rounded))
+                        .scaledFont(24, .black)
                 } else {
                     Image(systemName: "lock.fill")
                         .font(.system(size: 20, weight: .bold))
@@ -590,7 +614,7 @@ private struct TopOffMenuView: View {
     private func toggleRow(_ title: String, systemName: String, isOn: Binding<Bool>) -> some View {
         Toggle(isOn: isOn) {
             Label(title, systemImage: systemName)
-                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                .scaledFont(16, .semibold)
         }
         .padding(.vertical, 12)
     }
@@ -698,7 +722,8 @@ private final class TopOffShellModel: ObservableObject {
         apply(progress, to: first)
         attachHandlers(to: first)
         #if DEBUG
-        if ProcessInfo.processInfo.environment["TOPOFF_AUTOPLAY"] != nil {
+        if ProcessInfo.processInfo.environment["TOPOFF_AUTOPLAY"] != nil
+            || ProcessInfo.processInfo.environment["TOPOFF_AUTOPLAY_ALL"] != nil {
             first.debugAutoplay(TopOffLevels.campaign[startIndex].solution)
         }
         if ProcessInfo.processInfo.environment["TOPOFF_RANDOMPLAY"] != nil {
@@ -980,6 +1005,12 @@ private final class TopOffShellModel: ObservableObject {
         let next = TopOffScene(level: currentLevel, feedback: feedback)
         apply(progress, to: next)
         attachHandlers(to: next)
+        #if DEBUG
+        // End-to-end check: keep playing the reference solution on every level that loads.
+        if ProcessInfo.processInfo.environment["TOPOFF_AUTOPLAY_ALL"] != nil {
+            next.debugAutoplay(currentLevel.solution)
+        }
+        #endif
         moves = 0
         canUndo = false
         canAddBottle = true
