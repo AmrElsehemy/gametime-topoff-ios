@@ -257,4 +257,23 @@ final class TopOffEngineTests: XCTestCase {
         let later = calendar.date(from: DateComponents(year: 2024, month: 3, day: 1, hour: 23))!
         XCTAssertEqual(DailyPuzzle.dayNumber(for: later, calendar: calendar), 60)
     }
+
+    func testAnalyzeSeparatesUnsolvableFromTooBigToSay() {
+        let level = TopOffLevels.handcrafted[0]
+        XCTAssertEqual(Solver.analyze(level.board), .solvable(level.solution))
+
+        let stuck = Board(containers: [
+            Container(capacity: 2, layers: [LiquidColor(1), LiquidColor(2)]),
+            Container(capacity: 2, layers: [LiquidColor(2), LiquidColor(1)])
+        ])
+        XCTAssertEqual(Solver.analyze(stuck), .unsolvable)
+
+        let big = TopOffLevels.campaign[11].board
+        XCTAssertEqual(Solver.analyze(big, stateLimit: 5), .unknown, "A tiny limit proves nothing")
+
+        var done = Game(board: level.board)
+        for move in level.solution { try? done.pour(move) }
+        XCTAssertEqual(Solver.analyze(done.board), .solvable([]))
+    }
 }
+

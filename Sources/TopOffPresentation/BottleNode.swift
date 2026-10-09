@@ -15,6 +15,18 @@ enum TopOffPalette {
         }
     }
 
+    /// Spoken name for each colour, for VoiceOver.
+    static func name(for color: LiquidColor) -> String {
+        switch color.id % 6 {
+        case 1: return "red"
+        case 2: return "blue"
+        case 3: return "green"
+        case 4: return "yellow"
+        case 5: return "purple"
+        default: return "pink"
+        }
+    }
+
     /// A distinct glyph per colour, shown when pattern mode is on so colour is never the only cue.
     static func symbol(for color: LiquidColor) -> String {
         switch color.id % 6 {
