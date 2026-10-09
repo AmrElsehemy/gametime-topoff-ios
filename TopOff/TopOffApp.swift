@@ -492,10 +492,7 @@ private final class TopOffShellModel: ObservableObject {
     private static let log = Logger(subsystem: "ai.knowlly.topoff", category: "boosters")
     private let ads: TopOffAds
     private let boosters: TopOffBoosterService
-    private let feedback = GameFeedbackController(
-        audio: TopOffAudioController(),
-        haptics: TopOffHapticsController()
-    )
+    private let feedback = TopOffFeedback.makeController()
 
     var levelNumber: Int { min(levelIndex + 1, levels.count) }
     var levelCount: Int { levels.count }
