@@ -83,7 +83,7 @@ Based on the current state of `Sources/` (about 780 lines; see the audit in conv
 | Clock and seeded randomness | `GameTimeCore` | **Reuse** (deterministic generator and replays) | **Rebuilt (small).** The engine has its own seeded generator instead of `GameTimeCore`'s; worth reconciling. |
 | Build info | `GameTimeCore` | **Reuse** | **Not needed.** |
 | Save state with versioning, settings | Not provided | **Build locally**, compare with #001's, then extract | **Built locally** (`TopOffProgressStore`, versioned key). Compare with Exactly One's, then extract. |
-| Analytics events | Monetization events only | **Build locally**; align event naming with #001 | **Not built** (monetization events are no-ops). |
+| Analytics events | Monetization events only | **Build locally**; align event naming with #001 | **Built locally, on-device only:** typed versioned events, a local store, session and level tracking, an in-app tester summary and a log analyser (`docs/ANALYTICS.md`). It forwards to the kit's `AnalyticsClient` when one is attached, but ships none. Extraction candidate once #001 needs it. |
 | Game Center | `GameTimeServices` is a stub | **Build locally**, compare with #001 | **Not built.** |
 | Onboarding/tutorial scaffolding | Not provided | **Build locally**, compare with #001 | **Built minimally, locally:** the first two levels teach and are ad-free, plus a first-run hint. |
 | Replay and diagnostics | Not provided | Seed-based replay only; full tooling is post-v1 | **Not built.** Seeds make replay possible. |

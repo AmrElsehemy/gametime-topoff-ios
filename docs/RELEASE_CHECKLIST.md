@@ -18,6 +18,7 @@ Nothing below can be judged from a simulator or from code.
 - [ ] Settings: sound, haptics and colour symbols switches take effect immediately and persist.
 - [ ] iPad: portrait only, full screen. Play one level.
 - [ ] Dark mode only by design; check the launch screen colour matches.
+- [ ] Analytics: open the level menu, check **Tester tools** shows your play, and that **Export log** works. Send the exported file to the developer; `Tools/analyze_events.py` turns it into a per-level table.
 
 ## 2. Accounts and store setup
 
@@ -50,7 +51,7 @@ Release builds ship **no ad units**: the ad SDK does not start and hints and the
 - **Fixed text sizes.** HUD and menu text does not scale with Dynamic Type. VoiceOver, Reduce Motion and colour symbols are supported.
 - **Endless repeats after 364 boards;** the daily puzzle repeats yearly.
 - **Level difficulty is measured, not playtested.** `DifficultyProbe` says how easy a board is to win by luck and how often it dead-ends. It cannot say whether a level is fun.
-- **Not built:** Game Center, analytics, diagnostics.
+- **Analytics is on-device only** (no backend): see `docs/ANALYTICS.md`. TestFlight testers can export their log from the level menu. Game Center and diagnostics are not built.
 - **iPad** is portrait, full screen, with phone-style layout scaled up.
 
 ## Verification commands
