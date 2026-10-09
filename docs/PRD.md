@@ -1,6 +1,6 @@
 # Game #002 — Top Off
 
-> **Status:** Active. Canonical PRD for Game #002. The rules engine and first five handcrafted levels are complete; the next hard gate is a tactile five-level iPhone prototype.
+> **Status:** Feature-complete for v1 and in release preparation. The remaining work is human: a device playtest, the AdMob account, store checks and submission. See `docs/RELEASE_CHECKLIST.md`.
 > **Mechanic:** Stack/container family (see `gametime-ios/docs/GAME_MECHANIC_TAXONOMY.md`). Game #001 (Exactly One) is a constraint puzzle, so there is no mechanic overlap.
 > **Gate:** Per `gametime-ios/docs/DECISIONS.md`, Game #001 submission stays the priority. #002 must not displace anything #001 needs, including App Review follow-ups.
 
@@ -72,21 +72,21 @@ Based on the current state of `Sources/` (about 780 lines; see the audit in conv
 
 | Capability | GameTimeKit today | Plan for Top Off | Actual |
 |---|---|---|---|
-| Reward offers, requests, transactions | `GameTimeCommerce`: `RewardOffer`, `RewardRequest`, `RewardTransaction` | **Reuse as-is** | _TBD_ |
-| Rewarded ad flow, serialized presentation | `MonetizationCoordinator`, `RewardedAdCoordinator` | **Reuse as-is** | _TBD_ |
-| Eligibility, cooldowns, consent, remove-ads gating | `MonetizationPolicy`, `MonetizationPlacement` | **Reuse**; likely uses `rewardedHint`, `bonusReward`, `betweenLevels`; check whether an "extra container" placement needs a new case | _TBD_ |
-| Idempotent reward receipts | `RewardReceiptPersisting`, `InMemoryRewardReceiptStore` | **Reuse protocol; build persistent store.** Candidate to extract (also needed by #001) | _TBD_ |
-| Ad provider, entitlements, event tracking | Protocols plus no-op implementations | **Reuse protocols; write concrete adapters** (ad SDK, StoreKit). Candidate to extract | _TBD_ |
-| Semantic feedback events | `GameFeedbackEvent`: `placement`, `invalidMove`, `conflict`, `hint`, `undo`, `solve`, `milestone`, `pour` | **Reuse**; `pour` added to the platform (it is a shared semantic action in `GAME_MECHANIC_TAXONOMY.md`), so no aliasing needed | _TBD_ |
-| Haptics and audio controllers | Protocols and no-ops only | **Write concrete Core Haptics/AVFoundation adapters.** Strongest extraction candidate | _TBD_ |
-| SpriteKit effects (staggered timing, accessible feedback) | `GameTimeExperience/SpriteKitEffects` | **Reuse** for solve/milestone celebrations; liquid and pour rendering stays local | _TBD_ |
-| Clock and seeded randomness | `GameTimeCore` | **Reuse** (deterministic generator and replays) | _TBD_ |
-| Build info | `GameTimeCore` | **Reuse** | _TBD_ |
-| Save state with versioning, settings | Not provided | **Build locally**, compare with #001's, then extract | _TBD_ |
-| Analytics events | Monetization events only | **Build locally**; align event naming with #001 | _TBD_ |
-| Game Center | `GameTimeServices` is a stub | **Build locally**, compare with #001 | _TBD_ |
-| Onboarding/tutorial scaffolding | Not provided | **Build locally**, compare with #001 | _TBD_ |
-| Replay and diagnostics | Not provided | Seed-based replay only; full tooling is post-v1 | _TBD_ |
+| Reward offers, requests, transactions | `GameTimeCommerce`: `RewardOffer`, `RewardRequest`, `RewardTransaction` | **Reuse as-is** | **Reused as-is.** `TopOffBoosterService` builds `RewardOffer`/`RewardRequest` ids per level and booster. |
+| Rewarded ad flow, serialized presentation | `MonetizationCoordinator`, `RewardedAdCoordinator` | **Reuse as-is** | **Reused as-is** (`MonetizationCoordinator`). Added the missing concrete AdMob provider to the kit as `GameTimeAdMob`. |
+| Eligibility, cooldowns, consent, remove-ads gating | `MonetizationPolicy`, `MonetizationPlacement` | **Reuse**; likely uses `rewardedHint`, `bonusReward`, `betweenLevels`; check whether an "extra container" placement needs a new case | **Reused as-is.** Extra bottle uses `rewardedContinue`, so no new placement. Remove Ads not built: rewarded-only, per Exactly One's decision. |
+| Idempotent reward receipts | `RewardReceiptPersisting`, `InMemoryRewardReceiptStore` | **Reuse protocol; build persistent store.** Candidate to extract (also needed by #001) | **Protocol reused; persistent store built locally** (`UserDefaultsRewardReceiptStore`). Extraction candidate once Exactly One needs the same. |
+| Ad provider, entitlements, event tracking | Protocols plus no-op implementations | **Reuse protocols; write concrete adapters** (ad SDK, StoreKit). Candidate to extract | **Protocols reused; AdMob adapter built and moved into GameTimeKit** (`GameTimeAdMob`, with UMP consent). Entitlements and tracking not needed in v1. |
+| Semantic feedback events | `GameFeedbackEvent`: `placement`, `invalidMove`, `conflict`, `hint`, `undo`, `solve`, `milestone`, `pour` | **Reuse**; `pour` added to the platform (it is a shared semantic action in `GAME_MECHANIC_TAXONOMY.md`), so no aliasing needed | **Reused as-is.** `pour` already existed; `hint` doubles as the hidden-layer reveal cue and `milestone` as a bottle completing. |
+| Haptics and audio controllers | Protocols and no-ops only | **Write concrete Core Haptics/AVFoundation adapters.** Strongest extraction candidate | **Built, then extracted into GameTimeKit** (`CoreHapticsController`, `SynthAudioController`, `HapticPattern`, `SynthSound`). Top Off keeps only its cue tables. Exactly One has a near-identical engine and has not migrated. |
+| SpriteKit effects (staggered timing, accessible feedback) | `GameTimeExperience/SpriteKitEffects` | **Reuse** for solve/milestone celebrations; liquid and pour rendering stays local | **Not used.** Celebration, splash and slosh were written locally against the liquid renderer. |
+| Clock and seeded randomness | `GameTimeCore` | **Reuse** (deterministic generator and replays) | **Rebuilt (small).** The engine has its own seeded generator instead of `GameTimeCore`'s; worth reconciling. |
+| Build info | `GameTimeCore` | **Reuse** | **Not needed.** |
+| Save state with versioning, settings | Not provided | **Build locally**, compare with #001's, then extract | **Built locally** (`TopOffProgressStore`, versioned key). Compare with Exactly One's, then extract. |
+| Analytics events | Monetization events only | **Build locally**; align event naming with #001 | **Not built** (monetization events are no-ops). |
+| Game Center | `GameTimeServices` is a stub | **Build locally**, compare with #001 | **Not built.** |
+| Onboarding/tutorial scaffolding | Not provided | **Build locally**, compare with #001 | **Built minimally, locally:** the first two levels teach and are ad-free, plus a first-run hint. |
+| Replay and diagnostics | Not provided | Seed-based replay only; full tooling is post-v1 | **Not built.** Seeds make replay possible. |
 
 ### How to score reuse
 
@@ -94,14 +94,14 @@ At the end of the build, record for each row: **reused as-is / reused with chang
 
 **Success bar for the platform:** most of the monetization and feedback rows reused as-is or with small additive changes, and at least three rows (persistent receipts, haptics/audio adapters, save/settings versioning) identified as real extractions.
 
-## Milestones (proposed, adjust to the 50-day roadmap)
+## Milestones
 
-1. **Engine — COMPLETE:** `TopOffEngine` plus unit tests (rules, undo, solved) and five handcrafted levels with executable reference solutions.
-2. **Playable — NEXT GATE:** SpriteKit scene, one-tap interaction, all five handcrafted levels, bottle lift/pour/settle animation, invalid-move feedback, solve celebration, and feedback hooked to `GameFeedbackController`. Do not start large-scale generation work until this is playable on iPhone.
-3. **Generator and solver:** seeded, solver-verified levels, difficulty curve.
-4. **Monetization:** rewarded hint and extra container via `MonetizationCoordinator`, persistent receipts, remove-ads.
-5. **Polish and ops:** accessibility pass, Game Center, diagnostics, TestFlight.
-6. **Reuse retrospective:** fill the **Actual** column, open extraction PRs against GameTimeKit.
+1. **Engine: COMPLETE.** `TopOffEngine` with rules, undo, concealed layers, a shortest-solution solver, a seeded generator and `DifficultyProbe`.
+2. **Playable: COMPLETE.** SpriteKit scene with glass bottles, real pours, haptics and sound, solve celebration, level select, stars, saved progress.
+3. **Generator and solver: COMPLETE.** Levels are chosen by measured playability, not solution length. The daily puzzle and Endless draw from a table of vetted seeds.
+4. **Monetization: COMPLETE, ads off.** Rewarded hint and extra bottle through the shared coordinator and the new `GameTimeAdMob` adapter, with persistent receipts. Release builds ship no ad units until the AdMob account exists.
+5. **Polish and ops: MOSTLY COMPLETE.** Done: VoiceOver, Reduce Motion, colour-blind symbols, stuck-board nudge, icon, launch screen, privacy manifest, store screenshots, listing draft. Not done: Game Center, analytics, diagnostics.
+6. **Reuse retrospective: DONE** (the table above). Extracted so far: the AdMob adapter and the haptics and audio engines.
 
 ## Open questions
 
