@@ -118,25 +118,38 @@ final class TopOffEngineTests: XCTestCase {
         }
     }
 
-    func testCampaignRamp() throws {
+    func testCampaignLevelsAreSolvable() throws {
         let levels = TopOffLevels.campaign
         XCTAssertEqual(levels.map(\.id), Array(1...levels.count))
 
-        // Concealed-layer levels are shorter on paper but harder to play, so the length ramp
-        // is only checked across fully visible levels.
-        var previousLength = 0
         for level in levels {
             var game = Game(board: level.board)
             XCTAssertFalse(game.isSolved, "Level \(level.id) should start unsolved")
             for move in level.solution { try game.pour(move) }
             XCTAssertTrue(game.isSolved, "Level \(level.id) solution should solve the board")
-            let hasHidden = level.board.containers.contains { $0.hiddenLayers > 0 }
-            if hasHidden { continue }
-            if level.id > 2 {
-                XCTAssertGreaterThanOrEqual(level.solution.count + 3, previousLength, "Level \(level.id) should not be much easier than the last")
-            }
-            previousLength = level.solution.count
         }
+    }
+
+    /// Solution length says little about difficulty: two spare bottles make a board easy to win by
+    /// random tapping however long its best solution is. From level 7 on, a level must not be
+    /// a click-fest, and must not be a wall either.
+    func testLateCampaignLevelsAreNeitherClickFestsNorWalls() {
+        for level in TopOffLevels.campaign where level.id >= 7 {
+            let luck = DifficultyProbe.luckRate(level.board, trials: 80, seed: 5)
+            let trap = DifficultyProbe.trapRate(level.board, trials: 20, seed: 6)
+            XCTAssertLessThanOrEqual(luck, 60, "Level \(level.id) is won by random tapping \(luck)% of the time")
+            XCTAssertLessThanOrEqual(trap, 80, "Level \(level.id) is a wall: \(trap)% of random openings are dead ends")
+        }
+    }
+
+    func testDifficultyProbesAreDeterministicAndRankBoards() {
+        let tiny = TopOffLevels.handcrafted[0].board
+        XCTAssertEqual(DifficultyProbe.luckRate(tiny), DifficultyProbe.luckRate(tiny))
+        XCTAssertEqual(DifficultyProbe.luckRate(tiny), 100, "A 3-bottle teaching board is won by luck")
+
+        let hard = TopOffLevels.campaign[11].board   // level 12, the finale
+        XCTAssertLessThan(DifficultyProbe.luckRate(hard), DifficultyProbe.luckRate(tiny))
+        XCTAssertEqual(DifficultyProbe.luckRate(hard, trials: 0), 0)
     }
 
     func testSolverFindsShortestSolutionAndRejectsDeadBoards() {
@@ -182,7 +195,7 @@ final class TopOffEngineTests: XCTestCase {
     }
 
     func testStarsScaleWithMovesOverPar() {
-        let level = TopOffLevels.campaign[4]   // fully visible, so par is the true shortest
+        let level = TopOffLevels.campaign[3]   // level 4: fully visible, so par is the true shortest
         let par = level.solution.count
         XCTAssertEqual(level.stars(forMoves: par), 3)
         XCTAssertEqual(level.stars(forMoves: par * 3), 1)
@@ -201,7 +214,7 @@ final class TopOffEngineTests: XCTestCase {
         XCTAssertEqual(game.board.containers.count, before)
     }
 
-    func testDailyPuzzleIsDeterministicSolvableAndFollowsTheWeek() throws {
+    func testDailyPuzzleIsDeterministicAndSolvable() throws {
         for day in 800..<814 {
             let first = DailyPuzzle.level(forDay: day)
             let second = DailyPuzzle.level(forDay: day)
@@ -214,6 +227,26 @@ final class TopOffEngineTests: XCTestCase {
             XCTAssertTrue(game.isSolved, "Day \(day) solution should solve the board")
         }
         XCTAssertNotEqual(DailyPuzzle.level(forDay: 800).board, DailyPuzzle.level(forDay: 801).board)
+        XCTAssertNotEqual(DailyPuzzle.level(forDay: 800).board, DailyPuzzle.level(forDay: 807).board,
+                          "The same weekday a week later is a different board")
+    }
+
+    func testEveryDailySeedIsSolvableAndNoWeekdayIsAClickFest() {
+        // Day 0 is a Monday. Check every seed of every weekday, one full year.
+        var luckByWeekday = [[Int]](repeating: [], count: 7)
+        for week in 0..<52 {
+            for weekday in 0..<7 {
+                let level = DailyPuzzle.level(forDay: week * 7 + weekday)   // preconditions on unsolvable
+                if week % 13 == 0 {
+                    luckByWeekday[weekday].append(DifficultyProbe.luckRate(level.board, trials: 40, seed: 3))
+                }
+            }
+        }
+        // Midweek on, random tapping must rarely win. Monday and Tuesday are allowed to be gentle.
+        for weekday in 2..<7 {
+            XCTAssertTrue(luckByWeekday[weekday].allSatisfy { $0 <= 70 },
+                          "Weekday \(weekday) is too easy: \(luckByWeekday[weekday])")
+        }
     }
 
     func testDayNumberCountsCalendarDays() {
