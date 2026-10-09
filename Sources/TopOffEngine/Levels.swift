@@ -80,20 +80,24 @@ public enum TopOffLevels {
         }
     }
 
-    /// Seeds were picked offline with `Solver` for a steady difficulty ramp; see `testCampaignRamp`.
-    /// Comments give the shortest solution length. Levels with `visibleLayers` introduce
-    /// concealed layers, which are revealed once everything above them is poured away.
+    /// Boards were chosen offline by *playability*, not solution length (see `DifficultyProbe`).
+    /// `luck` is how often random tapping wins; `trap` is how often six random pours leave the board
+    /// unsolvable. Two spare bottles make a board easy however long its solution is, so tension comes
+    /// from one spare bottle, concealed layers, and bigger boards. Levels 3, 5 and 6 are deliberately
+    /// gentle: they introduce 3-bottle boards, concealed layers and a bigger board without a wall.
+    /// Levels with `visibleLayers` introduce concealed layers, which are revealed once everything above
+    /// them is poured away.
     private static let generated: [GeneratedSpec] = [
-        GeneratedSpec(seed: 1, colors: 3, capacity: 3, empties: 2),                     // 3: 7
-        GeneratedSpec(seed: 2, colors: 4, capacity: 3, empties: 2),                     // 4: 9
-        GeneratedSpec(seed: 2, colors: 4, capacity: 4, empties: 2),                     // 5: 14
-        GeneratedSpec(seed: 1, colors: 3, capacity: 3, empties: 2, visibleLayers: 2),   // 6: 7, first mystery
-        GeneratedSpec(seed: 1, colors: 5, capacity: 4, empties: 2),                     // 7: 16
-        GeneratedSpec(seed: 1, colors: 4, capacity: 4, empties: 2, visibleLayers: 2),   // 8: 12
-        GeneratedSpec(seed: 8, colors: 5, capacity: 4, empties: 1),                     // 9: 17, one spare bottle
-        GeneratedSpec(seed: 2, colors: 5, capacity: 4, empties: 2, visibleLayers: 2),   // 10: 15
-        GeneratedSpec(seed: 29, colors: 6, capacity: 4, empties: 2),                    // 11: 20
-        GeneratedSpec(seed: 4, colors: 6, capacity: 4, empties: 2, visibleLayers: 1)    // 12: 21, only tops visible
+        GeneratedSpec(seed: 11, colors: 3, capacity: 3, empties: 2),                    // 3: luck 100, easy start
+        GeneratedSpec(seed: 5, colors: 3, capacity: 3, empties: 1),                     // 4: luck 65 trap 21, first tight board
+        GeneratedSpec(seed: 1, colors: 3, capacity: 3, empties: 2, visibleLayers: 2),   // 5: luck 100, hidden layers introduced gently
+        GeneratedSpec(seed: 7, colors: 4, capacity: 4, empties: 2),                     // 6: bigger board, relaxed
+        GeneratedSpec(seed: 113, colors: 4, capacity: 3, empties: 1),                   // 7: luck 46 trap 53, first real puzzle
+        GeneratedSpec(seed: 1366, colors: 5, capacity: 4, empties: 2, visibleLayers: 2), // 8: luck 35 trap 8
+        GeneratedSpec(seed: 253, colors: 5, capacity: 4, empties: 1, visibleLayers: 2), // 9: luck 37 trap 65, tight and concealed
+        GeneratedSpec(seed: 534, colors: 6, capacity: 4, empties: 2, visibleLayers: 2), // 10: luck 24 trap 20
+        GeneratedSpec(seed: 603, colors: 6, capacity: 4, empties: 2, visibleLayers: 1), // 11: luck 31 trap 1, only tops visible
+        GeneratedSpec(seed: 2, colors: 4, capacity: 4, empties: 1)                      // 12: luck 3 trap 63, the finale
     ]
 
     /// The full ramp: two handcrafted teaching levels, then solver-verified generated levels.
