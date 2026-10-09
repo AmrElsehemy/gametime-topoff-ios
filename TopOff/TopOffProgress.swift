@@ -6,6 +6,10 @@ struct TopOffProgress: Codable, Equatable {
     var bestMoves: [Int: Int] = [:]
     /// Fewest pours used for each daily puzzle, keyed by `DailyPuzzle` day number.
     var dailyBest: [Int: Int] = [:]
+    /// Fewest pours used on each endless level, keyed by level number.
+    var endlessBest: [Int: Int] = [:]
+    /// The furthest endless level solved.
+    var endlessReached: Int { endlessBest.keys.max() ?? 0 }
     /// How many times each booster has been granted on a level (`"hint-<levelID>"`). It gives every
     /// reward opportunity its own stable id.
     var boosterUses: [String: Int] = [:]

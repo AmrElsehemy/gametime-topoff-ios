@@ -89,7 +89,11 @@ public enum DailyPuzzle {
 
     public static func level(forDay day: Int) -> TopOffLevel {
         let weekday = ((day % 7) + 7) % 7
-        let week = ((day - weekday) / 7)
+        return level(weekday: weekday, week: (day - weekday) / 7, id: day)
+    }
+
+    /// Builds the vetted board for a weekday shape and a week index (the table repeats yearly).
+    static func level(weekday: Int, week: Int, id: Int) -> TopOffLevel {
         let table = seeds[weekday]
         let seed = table[((week % table.count) + table.count) % table.count]
         let shape = shapes[weekday]
@@ -102,8 +106,22 @@ public enum DailyPuzzle {
             visibleLayers: shape.visibleLayers
         )
         guard let solution = Solver.solve(board, stateLimit: 1_500_000) else {
-            preconditionFailure("Daily seed \(seed) for weekday \(weekday) is unsolvable")
+            preconditionFailure("Seed \(seed) for weekday \(weekday) is unsolvable")
         }
-        return TopOffLevel(id: day, board: board, solution: solution)
+        return TopOffLevel(id: id, board: board, solution: solution)
+    }
+}
+
+/// Endless play: one board after another, with no end. Level `n` follows the weekly rhythm of the
+/// daily puzzle (gentle first, tense and concealed by the seventh) and then starts a new set of seven
+/// on fresh boards. It draws on the same vetted seed table, offset by half a year so today's daily
+/// puzzle does not turn up early. After 364 levels the boards repeat.
+public enum EndlessPuzzle {
+    /// Level ids start here so they never collide with campaign levels or daily day numbers.
+    public static let idBase = 1_000_000
+
+    public static func level(number: Int) -> TopOffLevel {
+        let index = max(1, number) - 1
+        return DailyPuzzle.level(weekday: index % 7, week: index / 7 + 26, id: idBase + index + 1)
     }
 }
