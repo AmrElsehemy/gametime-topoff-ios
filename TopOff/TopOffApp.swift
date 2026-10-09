@@ -1,6 +1,7 @@
 import SpriteKit
 import OSLog
 import SwiftUI
+import TopOffAnalytics
 import TopOffEngine
 import TopOffMonetization
 import TopOffPresentation
@@ -19,6 +20,7 @@ struct TopOffApp: App {
 private struct TopOffRootView: View {
     @StateObject private var shell = TopOffShellModel()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
 
     /// Pop-in transitions become plain fades when the player has Reduce Motion on.
     private func pop(_ scale: CGFloat) -> AnyTransition {
@@ -89,6 +91,7 @@ private struct TopOffRootView: View {
             }
         }
         .preferredColorScheme(.dark)
+        .onChange(of: scenePhase) { _, phase in shell.scenePhaseChanged(phase) }
         // Text grows with Dynamic Type, but is capped so the fixed-height bars never break.
         .dynamicTypeSize(...DynamicTypeSize.accessibility2)
         .alert(
@@ -431,6 +434,7 @@ private struct TopOffMenuView: View {
     @Environment(\.dismiss) private var dismiss
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 12), count: 4)
+    @State private var summary: AnalyticsSummary?
 
     var body: some View {
         ScrollView {
@@ -464,6 +468,10 @@ private struct TopOffMenuView: View {
                 .padding(.horizontal, 16)
                 .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
 
+                if shell.analyticsIsTester {
+                    testerTools
+                }
+
                 if shell.privacyOptionsRequired {
                     Button("Ad privacy choices") { shell.showPrivacyOptions() }
                         .scaledFont(15, .semibold)
@@ -478,6 +486,50 @@ private struct TopOffMenuView: View {
         }
         .background(Color(red: 0.07, green: 0.07, blue: 0.14).ignoresSafeArea())
         .preferredColorScheme(.dark)
+        .onAppear { if shell.analyticsIsTester { summary = shell.analyticsSummary() } }
+    }
+
+    /// Only in debug builds and TestFlight: what this device has recorded, and a way to send it to the developer.
+    private var testerTools: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("Tester tools", systemImage: "chart.bar.xaxis")
+                .scaledFont(15, .heavy)
+                .foregroundStyle(.yellow)
+
+            if let summary {
+                let played = summary.levels.reduce(0) { $0 + $1.starts }
+                let finished = summary.levels.reduce(0) { $0 + $1.completions }
+                Text("\(summary.sessions) sessions · \(played) levels started · \(finished) finished")
+                    .scaledFont(13, .medium)
+                    .foregroundStyle(.white.opacity(0.75))
+                ForEach(summary.hardestLevels(limit: 3), id: \.levelID) { level in
+                    Text("\(level.mode) \(level.levelID): \(Int(level.completionRate * 100))% finished, \(level.abandons) abandoned, stuck \(level.stuckShown)×")
+                        .scaledFont(12, .medium)
+                        .foregroundStyle(.white.opacity(0.55))
+                }
+            }
+
+            HStack(spacing: 12) {
+                if let url = shell.analyticsExportURL, FileManager.default.fileExists(atPath: url.path) {
+                    ShareLink(item: url) {
+                        Label("Export log", systemImage: "square.and.arrow.up")
+                            .scaledFont(14, .semibold)
+                    }
+                }
+                Button(role: .destructive) {
+                    shell.clearAnalytics()
+                    summary = shell.analyticsSummary()
+                } label: {
+                    Label("Clear", systemImage: "trash")
+                        .scaledFont(14, .semibold)
+                }
+            }
+            Text("Nothing is sent anywhere. The log stays on this device unless you export it.")
+                .scaledFont(11, .medium)
+                .foregroundStyle(.white.opacity(0.4))
+        }
+        .padding(14)
+        .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     private var dailyCard: some View {
@@ -646,13 +698,19 @@ private final class TopOffShellModel: ObservableObject {
     @Published private(set) var privacyOptionsRequired = false
     @Published private(set) var boosterBusy = false
     @Published var boosterPrompt: TopOffBooster?
-    @Published var showMenu = false
+    @Published var showMenu = false {
+        didSet {
+            if showMenu, !oldValue { analytics.track(.menuOpened) }
+        }
+    }
 
     private let levels = TopOffLevels.campaign
     private let store = TopOffProgressStore()
     private static let log = Logger(subsystem: "ai.knowlly.topoff", category: "boosters")
     private let ads: TopOffAds
     private let boosters: TopOffBoosterService
+    private let analytics: AnalyticsPipeline
+    private let gameplay: GameplayAnalytics
     private let feedback = TopOffFeedback.makeController()
 
     var levelNumber: Int { min(levelIndex + 1, levels.count) }
@@ -698,6 +756,10 @@ private final class TopOffShellModel: ObservableObject {
         #endif
         self.progress = progress
 
+        let analytics = AnalyticsPipeline.standard()
+        self.analytics = analytics
+        self.gameplay = GameplayAnalytics(pipeline: analytics)
+
         let ads = TopOffAds()
         self.ads = ads
         self.boosters = TopOffBoosterService(
@@ -731,6 +793,7 @@ private final class TopOffShellModel: ObservableObject {
         }
         #endif
         flashTitle()
+        trackLevelStart()
         Task { [weak self] in
             await ads.prepare()
             self?.privacyOptionsRequired = ads.privacyOptionsRequired
@@ -750,6 +813,52 @@ private final class TopOffShellModel: ObservableObject {
             }
         }
         #endif
+    }
+
+    // MARK: Analytics
+
+    func scenePhaseChanged(_ phase: ScenePhase) {
+        switch phase {
+        case .active: gameplay.appDidBecomeActive()
+        case .background: gameplay.appDidEnterBackground()
+        default: break
+        }
+    }
+
+    var analyticsIsTester: Bool { AnalyticsEnvironment.isTester }
+    var analyticsExportURL: URL? { analytics.exportFileURL() }
+    func analyticsSummary() -> AnalyticsSummary { AnalyticsSummary(events: analytics.events()) }
+    func clearAnalytics() { analytics.clearLocalEvents() }
+
+    private func levelInfo(for level: TopOffLevel) -> TopOffEvent.LevelInfo {
+        let mode: TopOffEvent.Mode
+        let number: Int
+        if isDaily {
+            mode = .daily
+            number = ((level.id % 7) + 7) % 7
+        } else if let endlessNumber {
+            mode = .endless
+            number = endlessNumber
+        } else {
+            mode = .campaign
+            number = levelIndex + 1
+        }
+        let containers = level.board.containers
+        let colors = Set(containers.flatMap { $0.layers.map(\.id) }).count
+        return TopOffEvent.LevelInfo(
+            mode: mode,
+            levelID: level.id,
+            number: number,
+            bottles: containers.count,
+            colors: colors,
+            capacity: containers.map(\.capacity).max() ?? 0,
+            hasHiddenLayers: level.hasHiddenLayers,
+            par: level.solution.count
+        )
+    }
+
+    private func trackLevelStart() {
+        gameplay.levelStarted(levelInfo(for: currentLevel))
     }
 
     // MARK: Progress
@@ -786,6 +895,7 @@ private final class TopOffShellModel: ObservableObject {
             get: { self.progress.soundOn },
             set: { value in
                 self.update { $0.soundOn = value }
+                self.analytics.track(.settingChanged(name: "sound", enabled: value))
                 self.scene.soundEnabled = value
             }
         )
@@ -796,6 +906,7 @@ private final class TopOffShellModel: ObservableObject {
             get: { self.progress.hapticsOn },
             set: { value in
                 self.update { $0.hapticsOn = value }
+                self.analytics.track(.settingChanged(name: "haptics", enabled: value))
                 self.scene.hapticsEnabled = value
             }
         )
@@ -806,6 +917,7 @@ private final class TopOffShellModel: ObservableObject {
             get: { self.progress.symbolsOn },
             set: { value in
                 self.update { $0.symbolsOn = value }
+                self.analytics.track(.settingChanged(name: "symbols", enabled: value))
                 self.scene.showsColorSymbols = value
             }
         )
@@ -814,8 +926,15 @@ private final class TopOffShellModel: ObservableObject {
     // MARK: Actions
 
     func activateBottle(_ index: Int) { scene.activateBottle(index) }
-    func undo() { scene.undo() }
-    func restart() { scene.restart() }
+    func undo() {
+        if canUndo { gameplay.undoUsed() }
+        scene.undo()
+    }
+
+    func restart() {
+        if moves > 0 { gameplay.restarted() }
+        scene.restart()
+    }
     // MARK: Boosters
 
     /// The first levels teach the game, so they never involve ads.
@@ -838,7 +957,11 @@ private final class TopOffShellModel: ObservableObject {
         Task { await grant(booster) }
     }
 
-    func cancelBooster() { boosterPrompt = nil }
+    func cancelBooster() {
+        guard let booster = boosterPrompt else { return }
+        boosterPrompt = nil
+        analytics.track(.boosterDeclined(booster: booster.rawValue, levelID: currentLevel.id))
+    }
 
     func showPrivacyOptions() {
         Task { await ads.presentPrivacyOptions() }
@@ -873,6 +996,7 @@ private final class TopOffShellModel: ObservableObject {
             Self.log.info("booster \(booster.rawValue, privacy: .public): adReady=\(ready) canRequestAds=\(self.ads.canRequestAds) onboarding=\(self.isOnboarding)")
             if ready {
                 boosterPrompt = booster
+                analytics.track(.boosterOffered(booster: booster.rawValue, levelID: currentLevel.id))
             } else {
                 await grant(booster)
             }
@@ -884,12 +1008,23 @@ private final class TopOffShellModel: ObservableObject {
         defer { boosterBusy = false }
         let outcome = await boosters.request(booster, context: boosterContext(for: booster))
         Self.log.info("booster \(booster.rawValue, privacy: .public) outcome: \(String(describing: outcome), privacy: .public)")
+        let levelID = currentLevel.id
+        switch outcome {
+        case let .granted(viaAd, freeReason):
+            analytics.track(.boosterGranted(booster: booster.rawValue, levelID: levelID, viaAd: viaAd, freeReason: freeReason?.rawValue))
+        case .cancelled:
+            analytics.track(.boosterCancelled(booster: booster.rawValue, levelID: levelID))
+        case .busy:
+            break
+        }
         guard outcome.isGranted else { return }
         let key = boosterKey(booster)
         update { $0.boosterUses[key, default: 0] += 1 }
         switch booster {
-        case .hint: scene.showHint()
-        case .extraBottle: scene.addExtraBottle()
+        case .hint:
+            if scene.showHint() { gameplay.hintShown() }
+        case .extraBottle:
+            if scene.addExtraBottle() { gameplay.bottleAdded() }
         }
     }
 
@@ -949,6 +1084,7 @@ private final class TopOffShellModel: ObservableObject {
             previousBest = progress.bestMoves[level.id]
         }
         let isBest = previousBest.map { moves < $0 } ?? true
+        let campaignSolvedBefore = progress.bestMoves.count
         if isBest {
             update {
                 if daily {
@@ -960,6 +1096,15 @@ private final class TopOffShellModel: ObservableObject {
                     $0.bestMoves[level.id] = moves
                 }
             }
+        }
+
+        gameplay.levelSolved(
+            moves: moves,
+            stars: level.stars(forMoves: moves),
+            streak: daily ? progress.dailyStreak(today: today) : nil
+        )
+        if !daily, endless == nil, campaignSolvedBefore < 2, progress.bestMoves.count >= 2 {
+            analytics.track(.tutorialCompleted)
         }
 
         withAnimation(.spring(duration: 0.4)) {
@@ -993,6 +1138,7 @@ private final class TopOffShellModel: ObservableObject {
         guard !didFinishPrototype else { return }
 
         if levelIndex + 1 >= levels.count {
+            analytics.track(.campaignCompleted(totalStars: totalStars))
             withAnimation(.spring(duration: 0.4)) { didFinishPrototype = true }
             return
         }
@@ -1019,6 +1165,7 @@ private final class TopOffShellModel: ObservableObject {
         withAnimation(.easeInOut(duration: 0.18)) {
             scene = next
         }
+        trackLevelStart()
         flashTitle()
     }
 
@@ -1035,12 +1182,14 @@ private final class TopOffShellModel: ObservableObject {
             self?.handleSolved(moves: moves)
         }
         scene.onStuckChange = { [weak self] stuck in
+            self?.gameplay.stuckChanged(stuck)
             withAnimation(.easeOut(duration: 0.25)) { self?.isStuck = stuck }
         }
         scene.onAccessibilityChange = { [weak self] bottles in
             self?.bottleAccessibility = bottles
         }
         scene.onStateChange = { [weak self] moves, canUndo, canAddBottle in
+            self?.gameplay.movesChanged(moves)
             self?.moves = moves
             self?.canUndo = canUndo
             self?.canAddBottle = canAddBottle

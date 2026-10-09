@@ -10,7 +10,8 @@ let package = Package(
     products: [
         .library(name: "TopOffEngine", targets: ["TopOffEngine"]),
         .library(name: "TopOffPresentation", targets: ["TopOffPresentation"]),
-        .library(name: "TopOffMonetization", targets: ["TopOffMonetization"])
+        .library(name: "TopOffMonetization", targets: ["TopOffMonetization"]),
+        .library(name: "TopOffAnalytics", targets: ["TopOffAnalytics"])
     ],
     dependencies: [
         .package(
@@ -34,7 +35,20 @@ let package = Package(
                 .product(name: "GameTimeAdMob", package: "gametime-ios")
             ]
         ),
+        .target(
+            name: "TopOffAnalytics",
+            dependencies: [
+                .product(name: "GameTimeServices", package: "gametime-ios")
+            ]
+        ),
         .testTarget(name: "TopOffEngineTests", dependencies: ["TopOffEngine"]),
+        .testTarget(
+            name: "TopOffAnalyticsTests",
+            dependencies: [
+                "TopOffAnalytics",
+                .product(name: "GameTimeServices", package: "gametime-ios")
+            ]
+        ),
         .testTarget(
             name: "TopOffMonetizationTests",
             dependencies: [
