@@ -50,7 +50,11 @@ Tap a bottle, tap another, and watch the liquid flow. Pour matching colours toge
 
 Suggested captions: "Pour, sort, top off" / "Watch every pour flow" / "Some colours are hidden" / "Collect stars, keep your streak" / "A new puzzle every day".
 
-Still needed: a 6.5" set if App Store Connect asks for it, and iPad screenshots only if iPad support stays enabled (the project targets iPhone and iPad).
+## Screenshots (iPad 13")
+
+iPad support stays enabled, so `iPad-13in/` holds the same five scenes at 2064x2752, captured from the iPad Pro 13-inch (M4) simulator: `1-sort.png`, `2-pour.png`, `3-hidden.png`, `4-levels.png`, `5-daily.png`. On iPad the bottles scale up (to 130pt wide, against 92pt on iPhone).
+
+Still needed: a 6.5" iPhone set only if App Store Connect asks for it.
 
 ## App Review notes
 

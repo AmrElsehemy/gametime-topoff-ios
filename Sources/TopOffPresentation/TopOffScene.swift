@@ -578,7 +578,9 @@ public final class TopOffScene: SKScene {
         let heightPerWidth = maxCapacity * 0.8 + 0.56
         let widthForHeight = (availableHeight - CGFloat(rows - 1) * rowGap) / (CGFloat(rows) * heightPerWidth)
         let widthForColumns = (size.width - 40 - CGFloat(columns - 1) * gap) / CGFloat(columns)
-        let width = min(92, widthForColumns, widthForHeight)
+        // Phones cap bottles at 92pt; wider screens such as iPad get proportionally larger ones.
+        let maxBottleWidth: CGFloat = size.width > 600 ? 130 : 92
+        let width = min(maxBottleWidth, widthForColumns, widthForHeight)
         let tallest = heightPerWidth * width
         let boardHeight = CGFloat(rows) * tallest + CGFloat(rows - 1) * rowGap
         let topY = size.height - topInset - (availableHeight - boardHeight) / 2
