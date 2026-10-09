@@ -26,5 +26,5 @@ Hint maps to `rewardedHint`; extra bottle maps to `rewardedContinue`. Each rewar
 3. Replace `GADApplicationIdentifier` in `TopOff/Info.plist` with the real AdMob app id (it currently holds Google's sample id).
 4. Configure the consent message in AdMob (Privacy & messaging) so the consent form appears where required.
 5. Add Google's recommended `SKAdNetworkItems` list to `TopOff/Info.plist`.
-6. Update the App Store privacy answers: AdMob collects device identifiers and usage data for advertising.
+6. Update the App Store privacy answers **and** `TopOff/PrivacyInfo.xcprivacy`: AdMob collects device identifiers and usage data for advertising, so the manifest's collected-data list and tracking flag must match (it currently declares no collection, which is correct only while no ads ship).
 7. Test on a real device with your device id in `testDeviceIdentifiers` before submitting.
