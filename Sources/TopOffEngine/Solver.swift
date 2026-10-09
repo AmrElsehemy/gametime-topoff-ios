@@ -1,8 +1,24 @@
-/// Breadth-first solver. Returns a shortest solution, or nil if the board is unsolvable
-/// or the search exceeds `stateLimit` distinct positions. It plays by the player's rules,
-/// so concealed layers limit how much a pour can move, but it sees every colour.
+/// What the solver concluded about a board.
+public enum SolveResult: Equatable, Sendable {
+    /// A shortest solution (empty if the board is already solved).
+    case solvable([Move])
+    /// The whole reachable space was searched and no solution exists: the player is stuck.
+    case unsolvable
+    /// The search hit its limit first, so nothing can be said either way.
+    case unknown
+}
+
+/// Breadth-first solver. It plays by the player's rules, so concealed layers limit how much a
+/// pour can move, but it sees every colour.
 public enum Solver {
+    /// A shortest solution, or nil if the board is unsolvable *or* the search exceeded
+    /// `stateLimit` distinct positions. Use `analyze` to tell those two apart.
     public static func solve(_ board: Board, stateLimit: Int = 2_000_000) -> [Move]? {
+        if case .solvable(let moves) = analyze(board, stateLimit: stateLimit) { return moves }
+        return nil
+    }
+
+    public static func analyze(_ board: Board, stateLimit: Int = 2_000_000) -> SolveResult {
         let start = board.containers
 
         // Bottle order never matters for solvability, so positions are keyed by their sorted form.
@@ -25,7 +41,7 @@ public enum Solver {
             let move: Move
         }
 
-        if start.allSatisfy(\.isSolved) { return [] }
+        if start.allSatisfy(\.isSolved) { return .solvable([]) }
         var nodes = [Node(state: start, parent: -1, move: Move(from: 0, to: 0))]
         var seen: Set<[UInt8]> = [key(start)]
 
@@ -60,13 +76,13 @@ public enum Solver {
                             moves.append(nodes[cursor].move)
                             cursor = nodes[cursor].parent
                         }
-                        return moves.reversed()
+                        return .solvable(moves.reversed())
                     }
-                    if nodes.count > stateLimit { return nil }
+                    if nodes.count > stateLimit { return .unknown }
                 }
             }
             head += 1
         }
-        return nil
+        return .unsolvable
     }
 }

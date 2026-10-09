@@ -4,6 +4,14 @@ import TopOffEngine
 #endif
 import GameTimeExperience
 
+/// What VoiceOver needs to know about one bottle. `frame` is in scene coordinates (origin bottom-left).
+public struct BottleAccessibility: Identifiable, Equatable, Sendable {
+    public let id: Int
+    public let label: String
+    public let value: String
+    public let frame: CGRect
+}
+
 @MainActor
 public final class TopOffScene: SKScene {
     private struct PourAnimation {
@@ -49,6 +57,21 @@ public final class TopOffScene: SKScene {
     public var onStateChange: ((_ moves: Int, _ canUndo: Bool, _ canAddBottle: Bool) -> Void)?
     private var extraBottleUsed = false
 
+    /// Fires when the board proves unsolvable (the player is stuck) and again when that clears.
+    public var onStuckChange: ((Bool) -> Void)?
+    /// Fires whenever bottle contents or selection change, so VoiceOver can describe the board.
+    public var onAccessibilityChange: (([BottleAccessibility]) -> Void)?
+    private var isStuck = false
+    private var analysisGeneration = 0
+
+    private var reduceMotion: Bool {
+        #if canImport(UIKit)
+        UIAccessibility.isReduceMotionEnabled
+        #else
+        false
+        #endif
+    }
+
     #if DEBUG
     private var autoplayMoves: [Move] = []
     private var nextAutoplay: TimeInterval?
@@ -58,6 +81,13 @@ public final class TopOffScene: SKScene {
         autoplayMoves = moves
         nextAutoplay = nil
     }
+
+    /// Debug only: plays random legal pours, to reach dead ends and exercise the stuck banner.
+    public func debugRandomPlay() {
+        debugRandom = true
+        nextAutoplay = nil
+    }
+    private var debugRandom = false
     #endif
 
     private func notifyState() {
@@ -86,6 +116,7 @@ public final class TopOffScene: SKScene {
 
     public override func didMove(to view: SKView) {
         buildBoard(animated: true)
+        analyzeBoard()
     }
 
     public override func didChangeSize(_ oldSize: CGSize) {
@@ -103,6 +134,7 @@ public final class TopOffScene: SKScene {
         activePour = nil
         buildBoard(animated: true)
         notifyState()
+        analyzeBoard()
     }
 
     public func undo() {
@@ -111,6 +143,7 @@ public final class TopOffScene: SKScene {
         deselectImmediately()
         refreshBottles(animated: true)
         notifyState()
+        analyzeBoard()
     }
 
     public func restart() {
@@ -125,6 +158,7 @@ public final class TopOffScene: SKScene {
             refreshBottles(animated: true)
         }
         notifyState()
+        analyzeBoard()
     }
 
     // MARK: - Input
@@ -180,9 +214,14 @@ public final class TopOffScene: SKScene {
         let bottle = bottles[index]
         bottle.setHighlighted(true)
         bottle.removeAction(forKey: "lift")
-        let lift = SKAction.moveTo(y: homes[index].y + 20, duration: 0.14)
-        lift.timingMode = .easeOut
-        bottle.run(lift, withKey: "lift")
+        // With Reduce Motion on, the glow alone marks the selection.
+        if !reduceMotion {
+            let lift = SKAction.moveTo(y: homes[index].y + 20, duration: 0.14)
+            lift.timingMode = .easeOut
+            bottle.run(lift, withKey: "lift")
+        }
+        announce("Bottle \(index + 1) selected")
+        notifyAccessibility()
     }
 
     private func clearSelection() {
@@ -194,6 +233,7 @@ public final class TopOffScene: SKScene {
         let drop = SKAction.moveTo(y: homes[index].y, duration: 0.12)
         drop.timingMode = .easeIn
         bottle.run(drop, withKey: "lift")
+        notifyAccessibility()
     }
 
     private func deselectImmediately() {
@@ -207,6 +247,16 @@ public final class TopOffScene: SKScene {
     private func invalidFeedback(on index: Int) {
         let bottle = bottles[index]
         bottle.removeAction(forKey: "invalid")
+        announce("Can't pour there")
+        if reduceMotion {
+            // No shake: flash the outline instead.
+            bottle.run(.sequence([
+                .run { bottle.setHighlighted(true) },
+                .wait(forDuration: 0.25),
+                .run { bottle.setHighlighted(false) }
+            ]), withKey: "invalid")
+            return
+        }
         let x = homes[index].x
         let shake = SKAction.sequence([
             .moveTo(x: x - 7, duration: 0.04),
@@ -214,6 +264,101 @@ public final class TopOffScene: SKScene {
             .moveTo(x: x, duration: 0.04)
         ])
         bottle.run(shake, withKey: "invalid")
+    }
+
+    // MARK: - Stuck detection
+
+    /// Re-checks, off the main thread, whether the board can still be solved. Only a complete search
+    /// that finds no solution counts as stuck; running out of search budget says nothing.
+    private func analyzeBoard() {
+        analysisGeneration += 1
+        let generation = analysisGeneration
+        guard !didSolve else {
+            setStuck(false)
+            return
+        }
+        let board = game.board
+        Task.detached(priority: .utility) { [weak self] in
+            let result = Solver.analyze(board, stateLimit: 300_000)
+            await MainActor.run {
+                guard let self, self.analysisGeneration == generation else { return }
+                self.setStuck(result == .unsolvable)
+            }
+        }
+    }
+
+    private func setStuck(_ stuck: Bool) {
+        guard stuck != isStuck else { return }
+        isStuck = stuck
+        onStuckChange?(stuck)
+        if stuck {
+            announce("This board can't be finished. Undo a few moves or restart.")
+        }
+    }
+
+    /// Plays the "no" cue for a hint that cannot work, so the tap is never met with silence.
+    public func rejectHint() {
+        feedback.play(.invalidMove, soundEnabled: soundEnabled, hapticsEnabled: hapticsEnabled)
+        if !isStuck {
+            announce("No hint available right now.")
+        }
+    }
+
+    // MARK: - Accessibility
+
+    /// Activates a bottle exactly as a tap would, for VoiceOver users.
+    public func activateBottle(_ index: Int) {
+        guard bottles.indices.contains(index) else { return }
+        handleTap(onContainer: index)
+    }
+
+    private func describe(_ container: Container, index: Int) -> (label: String, value: String) {
+        let position = "Bottle \(index + 1) of \(bottles.count)"
+        if container.isEmpty { return (position + ", empty", selectedIndex == index ? "Selected" : "") }
+
+        let hidden = container.isFull && container.isUniform ? 0 : container.hiddenLayers
+        var parts: [String] = []
+        var unknown = 0
+        // Read from the top down, merging runs of one colour.
+        for (offset, color) in container.layers.reversed().enumerated() {
+            let layerIndex = container.layers.count - 1 - offset
+            if layerIndex < hidden { unknown += 1; continue }
+            let name = TopOffPalette.name(for: color)
+            if let last = parts.last, last.hasPrefix(name + " ") {
+                let count = (Int(last.dropFirst(name.count + 1)) ?? 1) + 1
+                parts[parts.count - 1] = "\(name) \(count)"
+            } else {
+                parts.append("\(name) 1")
+            }
+        }
+        var text = parts.joined(separator: ", then ")
+        if unknown > 0 {
+            text += (text.isEmpty ? "" : ", then ") + "\(unknown) unknown"
+        }
+        let complete = container.isFull && container.isUniform
+        let label = position + (complete ? ", complete" : "") + ". From the top: " + text
+        return (label, selectedIndex == index ? "Selected" : "")
+    }
+
+    private func notifyAccessibility() {
+        guard let onAccessibilityChange else { return }
+        let items = game.board.containers.enumerated().map { index, container -> BottleAccessibility in
+            let description = describe(container, index: index)
+            return BottleAccessibility(
+                id: index,
+                label: description.label,
+                value: description.value,
+                frame: index < hitRects.count ? hitRects[index] : .zero
+            )
+        }
+        onAccessibilityChange(items)
+    }
+
+    private func announce(_ message: String) {
+        #if canImport(UIKit)
+        guard UIAccessibility.isVoiceOverRunning else { return }
+        UIAccessibility.post(notification: .announcement, argument: message)
+        #endif
     }
 
     // MARK: - Boosters
@@ -236,6 +381,7 @@ public final class TopOffScene: SKScene {
         let target = bottles[move.to]
         source.setHighlighted(true)
         target.setHighlighted(true)
+        announce("Hint: pour bottle \(move.from + 1) into bottle \(move.to + 1)")
 
         for bottle in [source, target] {
             bottle.removeAction(forKey: "hint")
@@ -261,15 +407,21 @@ public final class TopOffScene: SKScene {
         buildBoard(animated: false)
         // Pop the new bottle in so the change is obvious.
         if let bottle = bottles.last {
-            bottle.setScale(0.2)
             bottle.alpha = 0
-            bottle.run(.group([
-                .fadeIn(withDuration: 0.15),
-                .scale(to: 1, duration: 0.25)
-            ]))
+            if reduceMotion {
+                bottle.run(.fadeIn(withDuration: 0.2))
+            } else {
+                bottle.setScale(0.2)
+                bottle.run(.group([
+                    .fadeIn(withDuration: 0.15),
+                    .scale(to: 1, duration: 0.25)
+                ]))
+            }
         }
         feedback.play(.placement, soundEnabled: soundEnabled, hapticsEnabled: hapticsEnabled)
+        announce("Extra bottle added")
         notifyState()
+        analyzeBoard()
         return true
     }
 
@@ -282,6 +434,8 @@ public final class TopOffScene: SKScene {
         let target = bottles[to]
 
         selectedIndex = nil
+        analysisGeneration += 1
+        setStuck(false)
         source.setHighlighted(false)
         source.removeAllActions()
         source.zPosition = 50
@@ -344,6 +498,29 @@ public final class TopOffScene: SKScene {
 
     public override func update(_ currentTime: TimeInterval) {
         #if DEBUG
+        if debugRandom, activePour == nil, selectedIndex == nil, !didSolve, !isStuck {
+            if let due = nextAutoplay {
+                if currentTime >= due {
+                    let board = game.board
+                    var legal: [Move] = []
+                    for from in board.containers.indices {
+                        for to in board.containers.indices where from != to {
+                            if (try? board.validate(Move(from: from, to: to))) != nil { legal.append(Move(from: from, to: to)) }
+                        }
+                    }
+                    if let move = legal.randomElement() {
+                        handleTap(onContainer: move.from)
+                        run(.sequence([
+                            .wait(forDuration: 0.3),
+                            .run { [weak self] in self?.handleTap(onContainer: move.to) }
+                        ]))
+                    }
+                    nextAutoplay = currentTime + 1.8
+                }
+            } else {
+                nextAutoplay = currentTime + 1.0
+            }
+        }
         if activePour == nil, selectedIndex == nil, !didSolve, !autoplayMoves.isEmpty {
             if let due = nextAutoplay {
                 if currentTime >= due {
@@ -401,6 +578,11 @@ public final class TopOffScene: SKScene {
             feedback.play(.pour, soundEnabled: soundEnabled, hapticsEnabled: hapticsEnabled)
         }
 
+        if reduceMotion {
+            // The liquid still drains and fills, but nothing swings across the screen.
+            position = home
+            angle = 0
+        }
         source.position = position
         source.setTilt(angle)
 
@@ -423,7 +605,7 @@ public final class TopOffScene: SKScene {
         )
 
         updateStream(animation, source: source, target: target, angle: angle, progress: progress, t: t, flow: flow)
-        if progress > 0.02, progress < 0.98, currentTime - lastSplash > 0.05 {
+        if progress > 0.02, progress < 0.98, currentTime - lastSplash > 0.05, !reduceMotion {
             lastSplash = currentTime
             spawnSplash(animation, target: target, progress: progress)
         }
@@ -440,7 +622,7 @@ public final class TopOffScene: SKScene {
         flow: TimeInterval
     ) {
         let flowing = t >= approachDuration - 0.02 && t <= approachDuration + flow + 0.04
-        guard flowing else {
+        guard flowing, !reduceMotion else {
             animation.stream.alpha = 0
             return
         }
@@ -502,13 +684,17 @@ public final class TopOffScene: SKScene {
         source.setTilt(0)
         source.zPosition = 10
         refreshBottles(animated: true)
-        source.slosh()
-        bottles[pour.move.to].slosh()
+        if !reduceMotion {
+            source.slosh()
+            bottles[pour.move.to].slosh()
+        }
+        announce("Poured \(TopOffPalette.name(for: pour.color)) from bottle \(pour.move.from + 1) into bottle \(pour.move.to + 1)")
 
         if game.isSolved {
             didSolve = true
             queuedTap = nil
             feedback.play(.solve, soundEnabled: soundEnabled, hapticsEnabled: hapticsEnabled)
+            announce("Level solved in \(game.moveCount) moves")
             celebrate()
             run(.sequence([
                 .wait(forDuration: 1.25),
@@ -519,6 +705,8 @@ public final class TopOffScene: SKScene {
             ]))
             return
         }
+
+        analyzeBoard()
 
         if let queued = queuedTap {
             queuedTap = nil
@@ -543,8 +731,9 @@ public final class TopOffScene: SKScene {
             }
             let complete = container.isFull && container.isUniform
             if complete, !bottle.isComplete { completedNow = true }
-            bottle.setComplete(complete, color: container.topColor, animated: animated)
+            bottle.setComplete(complete, color: container.topColor, animated: animated && !reduceMotion)
         }
+        notifyAccessibility()
         guard animated, activePour == nil else { return }
         // A solve has its own fanfare, so the smaller cues only play mid-level.
         if completedNow, !game.isSolved {
@@ -621,16 +810,21 @@ public final class TopOffScene: SKScene {
 
             if animated {
                 bottle.alpha = 0
-                bottle.position.y -= 24
-                bottle.run(.sequence([
-                    .wait(forDuration: 0.05 * Double(index)),
-                    .group([
-                        .fadeIn(withDuration: 0.18),
-                        .moveTo(y: y, duration: 0.22)
-                    ])
-                ]))
+                if reduceMotion {
+                    bottle.run(.fadeIn(withDuration: 0.2))
+                } else {
+                    bottle.position.y -= 24
+                    bottle.run(.sequence([
+                        .wait(forDuration: 0.05 * Double(index)),
+                        .group([
+                            .fadeIn(withDuration: 0.18),
+                            .moveTo(y: y, duration: 0.22)
+                        ])
+                    ]))
+                }
             }
         }
+        notifyAccessibility()
     }
 
     private func addShelf(row: Int, y: CGFloat) {
@@ -703,6 +897,8 @@ public final class TopOffScene: SKScene {
             )
             orb.zPosition = -9
             addChild(orb)
+            // Reduce Motion keeps the lights but holds them still.
+            if reduceMotion { continue }
             let drift = 14 + 18 * abs(sin(seed * 9.1))
             let period = 5 + 4 * abs(sin(seed * 2.3))
             let up = SKAction.moveBy(x: 0, y: drift, duration: period)
@@ -715,7 +911,7 @@ public final class TopOffScene: SKScene {
 
     private func celebrate() {
         let center = CGPoint(x: size.width / 2, y: size.height / 2)
-        for index in 0..<36 {
+        for index in 0..<(reduceMotion ? 0 : 36) {
             let piece = SKShapeNode(rectOf: CGSize(width: 8, height: 12), cornerRadius: 2)
             piece.fillColor = TopOffPalette.color(for: LiquidColor(index % 6 + 1))
             piece.strokeColor = .clear

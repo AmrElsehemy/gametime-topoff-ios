@@ -18,6 +18,12 @@ struct TopOffApp: App {
 @MainActor
 private struct TopOffRootView: View {
     @StateObject private var shell = TopOffShellModel()
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// Pop-in transitions become plain fades when the player has Reduce Motion on.
+    private func pop(_ scale: CGFloat) -> AnyTransition {
+        reduceMotion ? .opacity : .scale(scale: scale).combined(with: .opacity)
+    }
 
     var body: some View {
         ZStack {
@@ -26,9 +32,17 @@ private struct TopOffRootView: View {
                 .id(ObjectIdentifier(shell.scene))
                 .ignoresSafeArea()
 
+            boardAccessibility
+
             VStack(spacing: 0) {
                 topBar
                 Spacer()
+                if shell.isStuck, !shell.didFinishPrototype {
+                    stuckBanner
+                        .padding(.horizontal, 18)
+                        .padding(.bottom, 12)
+                        .transition(.opacity)
+                }
                 if shell.levelIndex == 0, !shell.isDaily, shell.moves == 0, !shell.didFinishPrototype {
                     Text("Tap a bottle, then tap another to pour")
                         .font(.system(size: 14, weight: .semibold, design: .rounded))
@@ -59,19 +73,19 @@ private struct TopOffRootView: View {
                     }
                 }
                 .shadow(color: .black.opacity(0.35), radius: 16, y: 6)
-                .transition(.scale(scale: 0.85).combined(with: .opacity))
+                .transition(pop(0.85))
                 .allowsHitTesting(false)
             }
 
             if let result = shell.result {
                 resultBadge(result)
-                    .transition(.scale(scale: 0.8).combined(with: .opacity))
+                    .transition(pop(0.8))
                     .allowsHitTesting(false)
             }
 
             if shell.didFinishPrototype {
                 finishCard
-                    .transition(.scale(scale: 0.92).combined(with: .opacity))
+                    .transition(pop(0.92))
             }
         }
         .preferredColorScheme(.dark)
@@ -94,6 +108,60 @@ private struct TopOffRootView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
+    }
+
+    // MARK: Accessibility and stuck banner
+
+    /// SpriteKit draws the bottles but VoiceOver cannot see inside it, so each bottle gets an
+    /// invisible element here, placed over it. The overlay ignores touches; gameplay still goes
+    /// straight to the scene, and VoiceOver's activate gesture calls `activateBottle`.
+    private var boardAccessibility: some View {
+        GeometryReader { proxy in
+            ZStack(alignment: .topLeading) {
+                ForEach(shell.bottleAccessibility) { bottle in
+                    Color.clear
+                        .frame(width: bottle.frame.width, height: bottle.frame.height)
+                        .position(x: bottle.frame.midX, y: proxy.size.height - bottle.frame.midY)
+                        .accessibilityElement()
+                        .accessibilityLabel(bottle.label)
+                        .accessibilityValue(bottle.value)
+                        .accessibilityAddTraits(.isButton)
+                        .accessibilityAction { shell.activateBottle(bottle.id) }
+                }
+            }
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+    }
+
+    /// Shown when the board can no longer be finished. Never blocks play and never costs anything.
+    private var stuckBanner: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Can't be finished")
+                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                Text("Undo a few moves or restart")
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.65))
+            }
+            Spacer(minLength: 4)
+            if shell.canUndo {
+                Button("Undo", action: shell.undo)
+                    .buttonStyle(BannerButtonStyle(prominent: true))
+            }
+            Button("Restart", action: shell.restart)
+                .buttonStyle(BannerButtonStyle(prominent: !shell.canUndo))
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .frame(maxWidth: 380)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(.orange.opacity(0.5), lineWidth: 1)
+        }
+        .accessibilityElement(children: .contain)
     }
 
     // MARK: Top and bottom bars
@@ -304,6 +372,20 @@ private struct TopOffRootView: View {
     }
 }
 
+private struct BannerButtonStyle: ButtonStyle {
+    let prominent: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 14, weight: .bold, design: .rounded))
+            .foregroundStyle(prominent ? Color.black : Color.white)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 7)
+            .background(prominent ? Color.white : Color.white.opacity(0.14), in: Capsule())
+            .scaleEffect(configuration.isPressed ? 0.94 : 1)
+    }
+}
+
 private struct PressableStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -482,6 +564,8 @@ private final class TopOffShellModel: ObservableObject {
     @Published private(set) var result: Result?
     @Published private(set) var progress: TopOffProgress
     @Published private(set) var dailyLevel: TopOffLevel?
+    @Published private(set) var isStuck = false
+    @Published private(set) var bottleAccessibility: [BottleAccessibility] = []
     @Published private(set) var privacyOptionsRequired = false
     @Published private(set) var boosterBusy = false
     @Published var boosterPrompt: TopOffBooster?
@@ -550,6 +634,9 @@ private final class TopOffShellModel: ObservableObject {
         #if DEBUG
         if ProcessInfo.processInfo.environment["TOPOFF_AUTOPLAY"] != nil {
             first.debugAutoplay(TopOffLevels.campaign[startIndex].solution)
+        }
+        if ProcessInfo.processInfo.environment["TOPOFF_RANDOMPLAY"] != nil {
+            first.debugRandomPlay()
         }
         #endif
         flashTitle()
@@ -630,6 +717,7 @@ private final class TopOffShellModel: ObservableObject {
 
     // MARK: Actions
 
+    func activateBottle(_ index: Int) { scene.activateBottle(index) }
     func undo() { scene.undo() }
     func restart() { scene.restart() }
     // MARK: Boosters
@@ -677,7 +765,11 @@ private final class TopOffShellModel: ObservableObject {
         guard !boosterBusy, boosterPrompt == nil else { return }
         // Never ask for a video to earn something that cannot work.
         switch booster {
-        case .hint: guard scene.hintAvailable else { return }
+        case .hint:
+            guard scene.hintAvailable else {
+                scene.rejectHint()
+                return
+            }
         case .extraBottle: guard canAddBottle else { return }
         }
         Task {
@@ -794,6 +886,7 @@ private final class TopOffShellModel: ObservableObject {
         moves = 0
         canUndo = false
         canAddBottle = true
+        isStuck = false
 
         withAnimation(.easeInOut(duration: 0.18)) {
             scene = next
@@ -812,6 +905,12 @@ private final class TopOffShellModel: ObservableObject {
     private func attachHandlers(to scene: TopOffScene) {
         scene.onSolved = { [weak self] moves in
             self?.handleSolved(moves: moves)
+        }
+        scene.onStuckChange = { [weak self] stuck in
+            withAnimation(.easeOut(duration: 0.25)) { self?.isStuck = stuck }
+        }
+        scene.onAccessibilityChange = { [weak self] bottles in
+            self?.bottleAccessibility = bottles
         }
         scene.onStateChange = { [weak self] moves, canUndo, canAddBottle in
             self?.moves = moves
