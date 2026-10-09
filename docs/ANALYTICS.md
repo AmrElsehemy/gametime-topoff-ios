@@ -64,6 +64,12 @@ What to look for after a playtest:
 - **Hints and undos clustered on one level:** the same.
 - **Boosters offered but mostly declined or cancelled:** the ad prompt is too early or too frequent.
 
+## Decision: stay local for the first TestFlight round
+
+Decided on 2026-10-09. Reasons: the studio docs put telemetry aggregation under "only when justified", Top Off's PRD lists a custom backend as out of scope for v1, and the exported-log route gives per-level numbers with no infrastructure.
+
+For when that changes: the studio's common backend is the `gametime-backend` repo (a small FastAPI control plane for remote config, kill switches and support intake). As of the date above it has **no event endpoint, no database, and no deployment** (nothing on Vercel, nothing on Supabase, no hosting config or deploy step in the repo). Using it for analytics means, in order: pick a host and deploy it, give it a data store, add a validated `POST /v1/events` that enforces `TopOffEvent.allowedPropertyKeys`, then do the client steps below. Decide the host once, for the whole studio.
+
 ## Adding a remote backend (not done, deliberately)
 
 Everything needed is in place. The remaining decisions are the backend, consent and the store privacy answer:
