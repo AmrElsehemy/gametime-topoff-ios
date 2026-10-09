@@ -14,6 +14,7 @@
 		A10000000000000000000005 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000004 /* Assets.xcassets */; };
 		A10000000000000000000006 /* TopOffProgress.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000005 /* TopOffProgress.swift */; };
 		A10000000000000000000007 /* TopOffMonetization in Frameworks */ = {isa = PBXBuildFile; productRef = A90000000000000000000003 /* TopOffMonetization */; };
+		A10000000000000000000008 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000006 /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -22,6 +23,7 @@
 		A20000000000000000000003 /* TopOff.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TopOff.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A20000000000000000000004 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A20000000000000000000005 /* TopOffProgress.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TopOffProgress.swift; sourceTree = "<group>"; };
+		A20000000000000000000006 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -53,6 +55,7 @@
 				A20000000000000000000002 /* TopOffFeedback.swift */,
 				A20000000000000000000005 /* TopOffProgress.swift */,
 				A20000000000000000000004 /* Assets.xcassets */,
+				A20000000000000000000006 /* PrivacyInfo.xcprivacy */,
 			);
 			path = TopOff;
 			sourceTree = "<group>";
@@ -135,6 +138,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A10000000000000000000005 /* Assets.xcassets in Resources */,
+				A10000000000000000000008 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
