@@ -287,19 +287,38 @@ public final class TopOffScene: SKScene {
         source.zPosition = 50
 
         let direction: CGFloat = homes[to].x >= homes[from].x ? 1 : -1
-        let tilt = -direction * 0.8
 
         // Park the lip just above the target's opening, then work out where the body must sit.
+        // The steeper the tilt, the further the body swings away from the target, so ease the
+        // tilt until the whole bottle stays on screen (bottles at the edge pouring inward).
         let lipLocal = source.lip(towards: direction)
         let lipTarget = CGPoint(
             x: homes[to].x - direction * 2,
             y: homes[to].y + target.bodyHeight / 2 + 20
         )
-        let rotatedLip = CGPoint(
-            x: lipLocal.x * cos(tilt) - lipLocal.y * sin(tilt),
-            y: lipLocal.x * sin(tilt) + lipLocal.y * cos(tilt)
-        )
-        let pourPose = CGPoint(x: lipTarget.x - rotatedLip.x, y: lipTarget.y - rotatedLip.y)
+        let margin: CGFloat = 6
+        var tilt = -direction * 0.8
+        var pourPose = CGPoint.zero
+        for magnitude in stride(from: CGFloat(0.8), through: 0.35, by: -0.05) {
+            tilt = -direction * magnitude
+            let rotatedLip = CGPoint(
+                x: lipLocal.x * cos(tilt) - lipLocal.y * sin(tilt),
+                y: lipLocal.x * sin(tilt) + lipLocal.y * cos(tilt)
+            )
+            pourPose = CGPoint(x: lipTarget.x - rotatedLip.x, y: lipTarget.y - rotatedLip.y)
+
+            let corners = [
+                CGPoint(x: -source.bodyWidth / 2, y: -source.bodyHeight / 2),
+                CGPoint(x: source.bodyWidth / 2, y: -source.bodyHeight / 2),
+                CGPoint(x: -source.bodyWidth / 2, y: source.bodyHeight / 2),
+                CGPoint(x: source.bodyWidth / 2, y: source.bodyHeight / 2)
+            ]
+            let xs = corners.map { pourPose.x + $0.x * cos(tilt) - $0.y * sin(tilt) }
+            if let minX = xs.min(), let maxX = xs.max(),
+               minX >= margin, maxX <= size.width - margin {
+                break
+            }
+        }
 
         let stream = SKShapeNode()
         stream.strokeColor = TopOffPalette.color(for: pour.color)

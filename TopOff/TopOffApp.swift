@@ -510,7 +510,18 @@ private final class TopOffShellModel: ObservableObject {
     }
 
     init() {
-        let progress = store.load()
+        var progress = store.load()
+        #if DEBUG
+        // Fills the level grid and streak for App Store screenshots. Never saved.
+        if ProcessInfo.processInfo.environment["TOPOFF_DEMO_PROGRESS"] != nil {
+            progress = TopOffProgress()
+            for level in TopOffLevels.campaign.prefix(7) {
+                progress.bestMoves[level.id] = level.solution.count
+            }
+            let today = DailyPuzzle.dayNumber(for: Date())
+            for offset in 1...4 { progress.dailyBest[today - offset] = 12 }
+        }
+        #endif
         self.progress = progress
 
         let ads = TopOffAds()
