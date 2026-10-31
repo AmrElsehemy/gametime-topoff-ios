@@ -2,25 +2,32 @@
 
 ## What this is, and what it is not
 
-Top Off records a small, fixed set of gameplay events **on the device**. Nothing is sent anywhere today: no analytics SDK, no network calls, no backend. That keeps the App Store privacy answer at "Data Not Collected" and `PrivacyInfo.xcprivacy` accurate.
+Top Off records a small, fixed set of gameplay events. They are kept **on the device** and, while the player leaves **Share anonymous usage data** on (the default; it is in the level menu), sent anonymously to the studio's PostHog project (PostHog Cloud EU). No analytics SDK is linked: the pipeline and the PostHog client live in GameTimeKit's `GameTimeAnalytics` module, and Top Off keeps only its event schema (`TopOffEvent`), the level bookkeeping (`GameplayAnalytics`) and the tester summary.
 
-The point is to answer, once real players (or TestFlight testers) exist: where do they finish, struggle and quit? It follows the event vocabulary in `gametime-ios/docs/ANALYTICS_AND_EXPERIMENTS.md`.
+The point is to answer, with real players: where do they finish, struggle and quit? It follows the event vocabulary in `gametime-ios/docs/ANALYTICS_AND_EXPERIMENTS.md`.
 
 ## Where the data lives
 
-- Events are appended, one JSON object per line, to `Application Support/TopOff/events.jsonl` on the device.
-- The file is trimmed to the newest 5,000 events, so it cannot grow without bound.
+- Events are appended, one JSON object per line, to `Application Support/TopOff/events.jsonl` on the device, trimmed to the newest 5,000.
+- While sharing is on, they are also queued in `Application Support/TopOff/posthog-queue.json` and sent in batches to `https://eu.i.posthog.com/batch/`. The queue survives being offline and is capped at 1,000 events.
+- Every game shares one PostHog project; Top Off's events carry `game = top-off`.
 - **Debug builds and TestFlight** show a "Tester tools" section at the bottom of the level menu: a summary of this device's play, an **Export log** share button, and **Clear**. App Store builds show players nothing.
+
+## Setup
+
+Set the `POSTHOG_API_KEY` build setting on the TopOff target (it is empty in the repo) to the PostHog project API key. `Info.plist` passes it on as `PostHogAPIKey`. With it empty, no client is attached and nothing leaves the device.
 
 ## Privacy by construction
 
-- Identity is a random install id created on first launch. It is not derived from the device, the player or any advertising identifier, and it disappears when the app is deleted.
-- Events carry only coarse gameplay facts. The full list of property keys is `TopOffEvent.allowedPropertyKeys`, and a test fails if any event ever carries a key outside it. There is no free text, no name, no email, no location, no IDFA.
-- Forwarding to any remote client is gated by `AnalyticsPipeline.setSharingEnabled`, which is **off by default**, and no client is attached.
+- Identity is a random install id created on first launch. It is not derived from the device, the player or any advertising identifier, and it disappears when the app is deleted. There is no IDFA, so no App Tracking Transparency prompt.
+- Events sent to PostHog create no person profiles (`$process_person_profile: false`) and no IP-derived location (`$geoip_disable: true`).
+- Events carry only coarse gameplay facts. The full list of property keys is `TopOffEvent.allowedPropertyKeys`, and a test fails if any event ever carries a key outside it. There is no free text, no name, no email, no location.
+- The player can turn sharing off at any time; the choice is remembered and nothing more is sent.
+- App Store privacy answers: **Usage Data → Product Interaction**, used for **Analytics**, **not linked** to the user, **not used for tracking**. `PrivacyInfo.xcprivacy` declares the same.
 
 ## Schema (version 1)
 
-Every event also carries: `schema`, `app_version`, `build`, `install_id`, `session_id`, `seq`, `ts` (ms since epoch), `platform`, `idiom` (phone or pad), `os_major`, `lang`.
+Every event also carries: `game`, `schema`, `app_version`, `build`, `install_id`, `session_id`, `seq`, `ts` (ms since epoch), `platform`, `idiom` (phone or pad), `os_major`, `lang`.
 
 | Event | When | Properties |
 |---|---|---|

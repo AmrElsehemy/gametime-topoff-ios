@@ -1,4 +1,5 @@
 import Foundation
+import GameTimeAnalytics
 
 /// Turns a log of events into the numbers the studio cares about: where players finish, struggle
 /// and quit. Pure and deterministic, so it works on the device's own log, on a tester's exported

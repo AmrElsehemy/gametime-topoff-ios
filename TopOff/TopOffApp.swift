@@ -464,6 +464,8 @@ private struct TopOffMenuView: View {
                     toggleRow("Haptics", systemName: "iphone.radiowaves.left.and.right", isOn: shell.hapticsBinding)
                     Divider().overlay(.white.opacity(0.1))
                     toggleRow("Colour symbols", systemName: "eye.fill", isOn: shell.symbolsBinding)
+                    Divider().overlay(.white.opacity(0.1))
+                    toggleRow("Share anonymous usage data", systemName: "chart.bar.fill", isOn: shell.analyticsSharingBinding)
                 }
                 .padding(.horizontal, 16)
                 .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
@@ -479,6 +481,10 @@ private struct TopOffMenuView: View {
                 }
 
                 Text("Colour symbols draw a shape on each colour so the puzzle never depends on colour alone.")
+                    .scaledFont(12, .medium)
+                    .foregroundStyle(.white.opacity(0.45))
+
+                Text("Usage data is anonymous: which levels you play, finish and get stuck on, so we can make Top Off better. It is never linked to you or used for advertising.")
                     .scaledFont(12, .medium)
                     .foregroundStyle(.white.opacity(0.45))
             }
@@ -524,7 +530,7 @@ private struct TopOffMenuView: View {
                         .scaledFont(14, .semibold)
                 }
             }
-            Text("Nothing is sent anywhere. The log stays on this device unless you export it.")
+            Text("This is the on-device copy of what this device records. Anonymous usage data is only sent while sharing is on.")
                 .scaledFont(11, .medium)
                 .foregroundStyle(.white.opacity(0.4))
         }
@@ -698,6 +704,7 @@ private final class TopOffShellModel: ObservableObject {
     @Published private(set) var privacyOptionsRequired = false
     @Published private(set) var boosterBusy = false
     @Published var boosterPrompt: TopOffBooster?
+    @Published private var analyticsSharing = true
     @Published var showMenu = false {
         didSet {
             if showMenu, !oldValue { analytics.track(.menuOpened) }
@@ -759,6 +766,7 @@ private final class TopOffShellModel: ObservableObject {
         let analytics = AnalyticsPipeline.standard()
         self.analytics = analytics
         self.gameplay = GameplayAnalytics(pipeline: analytics)
+        self.analyticsSharing = analytics.isSharingEnabled
 
         let ads = TopOffAds()
         self.ads = ads
@@ -908,6 +916,16 @@ private final class TopOffShellModel: ObservableObject {
                 self.update { $0.hapticsOn = value }
                 self.analytics.track(.settingChanged(name: "haptics", enabled: value))
                 self.scene.hapticsEnabled = value
+            }
+        )
+    }
+
+    var analyticsSharingBinding: Binding<Bool> {
+        Binding(
+            get: { self.analyticsSharing },
+            set: { value in
+                self.analytics.setSharingEnabled(value)
+                self.analyticsSharing = value
             }
         )
     }

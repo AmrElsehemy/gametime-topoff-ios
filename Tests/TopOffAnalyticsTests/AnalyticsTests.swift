@@ -23,7 +23,10 @@ private final class Counter: @unchecked Sendable {
     func next() -> String { lock.withLock { value += 1; return "id-\(value)" } }
 }
 
-private let context = AnalyticsPipeline.Context(appVersion: "1.0.0", build: "1", idiom: "phone", osMajor: "17", language: "en")
+private let context = AnalyticsPipeline.Context(
+    game: AnalyticsPipeline.topOffGame, appVersion: "1.0.0", build: "1", idiom: "phone", osMajor: "17", language: "en",
+    schemaVersion: TopOffEvent.schemaVersion
+)
 
 private func makeInfo(id: Int = 5, mode: TopOffEvent.Mode = .campaign) -> TopOffEvent.LevelInfo {
     .init(mode: mode, levelID: id, number: id, bottles: 6, colors: 4, capacity: 4, hasHiddenLayers: false, par: 12)
@@ -44,6 +47,7 @@ private struct Harness {
             store: store,
             clients: clients ? [client] : [],
             context: context,
+            keyPrefix: AnalyticsPipeline.topOffKeyPrefix,
             suiteName: suite,
             now: { clock.now },
             makeID: { counter.next() }
@@ -71,7 +75,7 @@ final class AnalyticsPipelineTests: XCTestCase {
         let events = h.events()
         let last = events.last!
         XCTAssertEqual(last.name, "menu_opened")
-        for key in ["schema", "app_version", "build", "install_id", "session_id", "seq", "ts", "platform", "idiom", "os_major", "lang"] {
+        for key in ["game", "schema", "app_version", "build", "install_id", "session_id", "seq", "ts", "platform", "idiom", "os_major", "lang"] {
             XCTAssertNotNil(last.properties[key], "missing \(key)")
         }
         let sequence = events.compactMap { $0.properties["seq"].flatMap(Int.init) }
@@ -100,11 +104,11 @@ final class AnalyticsPipelineTests: XCTestCase {
     func testSharingChoiceAndInstallIDSurviveARelaunch() {
         let suite = "topoff.analytics.tests.\(UUID().uuidString)"
         defer { UserDefaults.standard.removePersistentDomain(forName: suite) }
-        let first = AnalyticsPipeline(store: InMemoryEventStore(), context: context, suiteName: suite, makeID: { "install-A" })
+        let first = AnalyticsPipeline(store: InMemoryEventStore(), context: context, keyPrefix: "t", suiteName: suite, makeID: { "install-A" })
         first.setSharingEnabled(true)
         first.flush()
         let storeB = InMemoryEventStore()
-        let second = AnalyticsPipeline(store: storeB, context: context, suiteName: suite, makeID: { "install-B" })
+        let second = AnalyticsPipeline(store: storeB, context: context, keyPrefix: "t", suiteName: suite, makeID: { "install-B" })
         second.track(.menuOpened)
         second.flush()
         XCTAssertTrue(second.isSharingEnabled)
