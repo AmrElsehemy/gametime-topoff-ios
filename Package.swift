@@ -16,7 +16,7 @@ let package = Package(
     dependencies: [
         .package(
             url: "https://github.com/AmrElsehemy/gametime-ios.git",
-            revision: "5906bd8966ea87b4fce8876c2701c4b9ed74664c"
+            revision: "5c12bf2ae61c1ce4dbf338733daef1a71b1cf7f9"
         )
     ],
     targets: [
