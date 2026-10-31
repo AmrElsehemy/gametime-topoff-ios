@@ -26,7 +26,8 @@ Nothing below can be judged from a simulator or from code.
 - [ ] **Bundle ID:** `ai.knowlly.topoff` registered under team `4XD74F27J2`, and an app record created in App Store Connect.
 - [ ] **URLs:** a support URL and a privacy policy URL (both required, neither exists yet).
 - [ ] **Age rating questionnaire:** expected 4+.
-- [ ] **App Privacy:** while no ads ship, "Data Not Collected" is accurate and matches `TopOff/PrivacyInfo.xcprivacy`. Revisit when ads are enabled (see `docs/ADS.md`).
+- [ ] **App Privacy:** declare **Usage Data → Product Interaction**, used for **Analytics**, **not linked** to the user, **not used for tracking** (anonymous PostHog events, on by default with an opt-out in the level menu). This matches `TopOff/PrivacyInfo.xcprivacy`. Revisit when ads are enabled (see `docs/ADS.md`).
+- [ ] **Analytics key:** set the `POSTHOG_API_KEY` build setting on the TopOff target; with it empty, no events are sent. After the first TestFlight session, confirm `game = top-off` events in PostHog's live events view.
 - [ ] **Metadata:** copy from `Marketing/AppStore/LISTING.md` (name, subtitle, promo text, description, keywords, review notes).
 - [ ] **Screenshots:** `Marketing/AppStore/6.9in/` (iPhone 6.9") and `Marketing/AppStore/iPad-13in/` (iPad 13"), five each. App Store Connect scales these down for smaller sizes.
 
@@ -51,7 +52,7 @@ Release builds ship **no ad units**: the ad SDK does not start and hints and the
 - **Fixed text sizes.** HUD and menu text does not scale with Dynamic Type. VoiceOver, Reduce Motion and colour symbols are supported.
 - **Endless repeats after 364 boards;** the daily puzzle repeats yearly.
 - **Level difficulty is measured, not playtested.** `DifficultyProbe` says how easy a board is to win by luck and how often it dead-ends. It cannot say whether a level is fun.
-- **Analytics is on-device only** (no backend): see `docs/ANALYTICS.md`. TestFlight testers can export their log from the level menu. Game Center and diagnostics are not built.
+- **Analytics** goes to the studio's PostHog project (EU) while "Share anonymous usage data" is on, and is also kept on the device: see `docs/ANALYTICS.md`. TestFlight testers can export their log from the level menu. Game Center and diagnostics are not built.
 - **iPad** is portrait, full screen, with phone-style layout scaled up.
 
 ## Verification commands
