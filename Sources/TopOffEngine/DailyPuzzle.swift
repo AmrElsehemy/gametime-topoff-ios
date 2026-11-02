@@ -1,4 +1,5 @@
 import Foundation
+import GameTimeCore
 
 /// A fresh solver-verified level for every calendar day. The same day always yields the same
 /// board on every device, so no backend is needed.
@@ -75,8 +76,27 @@ public enum DailyPuzzle {
         ]
     ]
 
-    /// Whole days since 1 January 2024 in `calendar`'s time zone.
-    public static func dayNumber(for date: Date, calendar: Calendar = .current) -> Int {
+    /// Whole days since 1 January 2024, with days turning over at midnight in `timeZone` (GameTimeKit's
+    /// shared daily calendar). Always Gregorian, whatever calendar the device is set to.
+    public static func dayNumber(for date: Date, timeZone: TimeZone = .current) -> Int {
+        DailyCalendar.local(timeZone).day(for: date).index
+    }
+
+    /// Consecutive daily puzzles solved, ending today, or yesterday while today is still open.
+    public static func streak(solvedDays: some Sequence<Int>, today: Int) -> Int {
+        DailyStreak.length(of: Set(solvedDays.map(DailyDay.init(index:))), asOf: DailyDay(index: today))
+    }
+
+    /// Day numbers saved before `dayNumber` became Gregorian were counted in the device's calendar, so on
+    /// a phone set to, say, the Japanese or Islamic calendar they are offset by a constant. Adding this to
+    /// such a saved day number gives the current one. It is 0 on Gregorian devices.
+    public static func shiftFromLegacyDayNumbers(at date: Date = Date(), calendar: Calendar = .current) -> Int {
+        dayNumber(for: date, timeZone: calendar.timeZone) - legacyDayNumber(for: date, calendar: calendar)
+    }
+
+    /// The day number as the 1.0 build counted it: days since 1 January of year 2024 *in `calendar`*,
+    /// which is only 2024 CE for the Gregorian calendar. Kept for migrating saved days.
+    static func legacyDayNumber(for date: Date, calendar: Calendar) -> Int {
         var components = DateComponents()
         components.year = 2024
         components.month = 1

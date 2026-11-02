@@ -16,11 +16,16 @@ let package = Package(
     dependencies: [
         .package(
             url: "https://github.com/AmrElsehemy/gametime-ios.git",
-            revision: "f2e67aff831f38f413067cff925fed17df57ca4e"
+            revision: "5f1c10b675563da934c7784f9a60e26831fad5d1"
         )
     ],
     targets: [
-        .target(name: "TopOffEngine"),
+        .target(
+            name: "TopOffEngine",
+            dependencies: [
+                .product(name: "GameTimeCore", package: "gametime-ios")
+            ]
+        ),
         .target(
             name: "TopOffPresentation",
             dependencies: [
