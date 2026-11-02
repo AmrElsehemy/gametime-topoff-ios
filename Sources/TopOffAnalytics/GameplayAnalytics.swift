@@ -1,4 +1,5 @@
 import Foundation
+import GameTimeAnalytics
 
 /// Follows the level the player is on and turns what they do into level events.
 ///

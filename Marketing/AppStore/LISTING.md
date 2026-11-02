@@ -64,4 +64,4 @@ Still needed: a 6.5" iPhone set only if App Store Connect asks for it.
 
 ## Privacy answers
 
-While no ads ship: data not collected. When AdMob is enabled this changes (device identifiers and usage data for advertising); see `docs/ADS.md`.
+Usage Data → Product Interaction, used for Analytics, not linked to the user, not used for tracking (anonymous PostHog events; players can opt out in the level menu). When AdMob is enabled this changes again (device identifiers and usage data for advertising); see `docs/ADS.md`.

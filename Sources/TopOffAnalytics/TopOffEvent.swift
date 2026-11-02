@@ -173,8 +173,8 @@ public enum TopOffEvent: Equatable, Sendable {
     /// Every property key any event may carry, including the common ones the pipeline stamps. A test
     /// asserts nothing outside this list is ever emitted, which is the privacy guard for this schema.
     public static let allowedPropertyKeys: Set<String> = [
-        // common
-        "schema", "app_version", "build", "install_id", "session_id", "seq", "ts", "platform", "idiom", "os_major", "lang",
+        // common (stamped by the kit's `AnalyticsPipeline`; see `AnalyticsPipeline.commonPropertyKeys`)
+        "game", "schema", "app_version", "build", "install_id", "session_id", "seq", "ts", "platform", "idiom", "os_major", "lang",
         // level
         "mode", "level_id", "level_number", "bottles", "colors", "capacity", "hidden", "par",
         // run
