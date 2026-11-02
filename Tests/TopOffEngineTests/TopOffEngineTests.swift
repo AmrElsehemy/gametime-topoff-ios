@@ -252,10 +252,50 @@ final class TopOffEngineTests: XCTestCase {
     func testDayNumberCountsCalendarDays() {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(identifier: "UTC")!
+        let utc = calendar.timeZone
         let jan1 = calendar.date(from: DateComponents(year: 2024, month: 1, day: 1))!
-        XCTAssertEqual(DailyPuzzle.dayNumber(for: jan1, calendar: calendar), 0)
+        XCTAssertEqual(DailyPuzzle.dayNumber(for: jan1, timeZone: utc), 0)
         let later = calendar.date(from: DateComponents(year: 2024, month: 3, day: 1, hour: 23))!
-        XCTAssertEqual(DailyPuzzle.dayNumber(for: later, calendar: calendar), 60)
+        XCTAssertEqual(DailyPuzzle.dayNumber(for: later, timeZone: utc), 60)
+    }
+
+    func testDayNumberMatchesTheOneBuildOnGregorianDevices() {
+        for zone in ["Europe/London", "America/New_York", "Asia/Tokyo", "Australia/Lord_Howe"] {
+            var calendar = Calendar(identifier: .gregorian)
+            calendar.timeZone = TimeZone(identifier: zone)!
+            for hours in stride(from: 0, to: 24 * 900, by: 7) {
+                let date = Date(timeIntervalSince1970: 1_704_067_200 + Double(hours) * 3_600)
+                XCTAssertEqual(DailyPuzzle.dayNumber(for: date, timeZone: calendar.timeZone),
+                               DailyPuzzle.legacyDayNumber(for: date, calendar: calendar), "\(zone) \(date)")
+            }
+            XCTAssertEqual(DailyPuzzle.shiftFromLegacyDayNumbers(calendar: calendar), 0)
+        }
+    }
+
+    func testDayNumberIsGregorianOnDevicesSetToOtherCalendars() throws {
+        // 1.0 counted days in the device's calendar, so a Japanese-calendar phone was offset by hundreds of
+        // thousands of days and landed on the wrong weekday's puzzle. Now every device agrees.
+        let monday = Date(timeIntervalSince1970: 1_793_620_800) // 2026-11-02T12:00Z, a Monday
+        let utc = try XCTUnwrap(TimeZone(identifier: "UTC"))
+        let today = DailyPuzzle.dayNumber(for: monday, timeZone: utc)
+        XCTAssertEqual(today % 7, 0, "Monday's gentle board")
+        for identifier in [Calendar.Identifier.japanese, .buddhist, .islamicUmmAlQura, .hebrew, .persian] {
+            var calendar = Calendar(identifier: identifier)
+            calendar.timeZone = utc
+            let legacy = DailyPuzzle.legacyDayNumber(for: monday, calendar: calendar)
+            let shift = DailyPuzzle.shiftFromLegacyDayNumbers(at: monday, calendar: calendar)
+            XCTAssertEqual(legacy + shift, today, "\(identifier): a day saved by 1.0 maps onto today's number")
+            let yesterday = DailyPuzzle.legacyDayNumber(for: monday.addingTimeInterval(-86_400), calendar: calendar)
+            XCTAssertEqual(yesterday + shift, today - 1, "\(identifier): the shift is the same every day")
+        }
+    }
+
+    func testStreakCountsBackFromTodayOrYesterday() {
+        XCTAssertEqual(DailyPuzzle.streak(solvedDays: [10, 11, 12], today: 12), 3)
+        XCTAssertEqual(DailyPuzzle.streak(solvedDays: [10, 11, 12], today: 13), 3, "Today is still open")
+        XCTAssertEqual(DailyPuzzle.streak(solvedDays: [10, 11, 12], today: 14), 0, "Yesterday was missed")
+        XCTAssertEqual(DailyPuzzle.streak(solvedDays: [8, 10, 11], today: 11), 2)
+        XCTAssertEqual(DailyPuzzle.streak(solvedDays: [Int](), today: 11), 0)
     }
 
     func testAnalyzeSeparatesUnsolvableFromTooBigToSay() {
