@@ -79,14 +79,17 @@ public final class TopOffProgressStore: @unchecked Sendable {
 
     /// - Parameter dayNumberShift: see `DailyPuzzle.shiftFromLegacyDayNumbers`; tests pass their own.
     public func load(dayNumberShift: @autoclosure () -> Int = DailyPuzzle.shiftFromLegacyDayNumbers()) -> TopOffProgress {
-        switch store.load() {
+        let result = store.load()
+        if case let .recovered(_, recovery) = result {
+            lock.withLock { self.recovery = recovery }
+        } else {
+            lock.withLock { self.recovery = nil }
+        }
+        switch result {
         case var .loaded(progress):
             progress.migrateDayNumbering(shift: dayNumberShift())
             return progress
-        case .fresh:
-            return freshProgress()
-        case let .recovered(_, recovery):
-            lock.withLock { self.recovery = recovery }
+        case .fresh, .recovered:
             return freshProgress()
         }
     }
@@ -95,7 +98,7 @@ public final class TopOffProgressStore: @unchecked Sendable {
         store.save(progress)
     }
 
-    /// Set when the last load found a save it could not read (and backed it up).
+    /// Set when the most recent load found a save it could not read (and backed it up); nil otherwise.
     public var lastRecovery: SaveRecovery? { lock.withLock { recovery } }
 
     /// A new player, carrying over the symbol toggle saved by the earliest builds.

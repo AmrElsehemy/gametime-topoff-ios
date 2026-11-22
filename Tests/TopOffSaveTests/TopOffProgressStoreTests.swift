@@ -79,6 +79,9 @@ final class TopOffProgressStoreTests: XCTestCase {
         XCTAssertEqual(raw.backups(), [recovery])
         XCTAssertEqual(raw.backupData(for: recovery), corrupted)
         XCTAssertEqual(TopOffProgressStore(defaults: defaults).load(dayNumberShift: 0).bestMoves, [1: 8])
+
+        _ = store.load(dayNumberShift: 0)
+        XCTAssertNil(store.lastRecovery, "A later successful load clears the recovery")
     }
 
     func testANewPlayerStartsFreshAndRoundTrips() {
