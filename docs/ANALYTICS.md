@@ -44,6 +44,7 @@ Every event also carries: `game`, `schema`, `app_version`, `build`, `install_id`
 | `menu_opened` | level menu opened | none |
 | `setting_changed` | sound, haptics or symbols toggled | `name`, `enabled` |
 | `tutorial_completed` | first two campaign levels solved | none |
+| `save_recovered` | at launch, the saved progress could not be read and was backed up instead of being overwritten | `store` (`progress`) |
 | `campaign_completed` | level 12 solved | `total_stars` |
 
 **Level facts:** `mode` (campaign, daily, endless), `level_id`, `level_number`, `bottles`, `colors`, `capacity`, `hidden`, `par`.

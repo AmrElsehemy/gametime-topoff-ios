@@ -11,12 +11,13 @@ let package = Package(
         .library(name: "TopOffEngine", targets: ["TopOffEngine"]),
         .library(name: "TopOffPresentation", targets: ["TopOffPresentation"]),
         .library(name: "TopOffMonetization", targets: ["TopOffMonetization"]),
-        .library(name: "TopOffAnalytics", targets: ["TopOffAnalytics"])
+        .library(name: "TopOffAnalytics", targets: ["TopOffAnalytics"]),
+        .library(name: "TopOffSave", targets: ["TopOffSave"])
     ],
     dependencies: [
         .package(
             url: "https://github.com/AmrElsehemy/gametime-ios.git",
-            revision: "5f1c10b675563da934c7784f9a60e26831fad5d1"
+            revision: "adafe605f221884ee495845b59458f1ad370f248"
         )
     ],
     targets: [
@@ -47,7 +48,21 @@ let package = Package(
                 .product(name: "GameTimeAnalytics", package: "gametime-ios")
             ]
         ),
+        .target(
+            name: "TopOffSave",
+            dependencies: [
+                "TopOffEngine",
+                .product(name: "GameTimePersistence", package: "gametime-ios")
+            ]
+        ),
         .testTarget(name: "TopOffEngineTests", dependencies: ["TopOffEngine"]),
+        .testTarget(
+            name: "TopOffSaveTests",
+            dependencies: [
+                "TopOffSave",
+                .product(name: "GameTimePersistence", package: "gametime-ios")
+            ]
+        ),
         .testTarget(
             name: "TopOffAnalyticsTests",
             dependencies: [

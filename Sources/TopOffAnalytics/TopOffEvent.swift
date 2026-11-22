@@ -84,6 +84,8 @@ public enum TopOffEvent: Equatable, Sendable {
     case settingChanged(name: String, enabled: Bool)
     case tutorialCompleted
     case campaignCompleted(totalStars: Int)
+    /// At launch, a saved store could not be read and was backed up instead of being overwritten.
+    case saveRecovered(store: String)
 
     public var name: String {
         switch self {
@@ -105,6 +107,7 @@ public enum TopOffEvent: Equatable, Sendable {
         case .settingChanged: "setting_changed"
         case .tutorialCompleted: "tutorial_completed"
         case .campaignCompleted: "campaign_completed"
+        case .saveRecovered: "save_recovered"
         }
     }
 
@@ -167,6 +170,8 @@ public enum TopOffEvent: Equatable, Sendable {
             return ["name": name, "enabled": enabled ? "1" : "0"]
         case let .campaignCompleted(stars):
             return ["total_stars": String(stars)]
+        case let .saveRecovered(store):
+            return ["store": store]
         }
     }
 
@@ -180,6 +185,6 @@ public enum TopOffEvent: Equatable, Sendable {
         // run
         "attempt", "moves", "duration_s", "undos", "restarts", "hints", "bottles_added", "stuck_seen", "stars", "streak", "reason",
         // other
-        "levels_completed", "moves_before", "via", "booster", "via_ad", "free_reason", "name", "enabled", "total_stars"
+        "levels_completed", "moves_before", "via", "booster", "via_ad", "free_reason", "name", "enabled", "total_stars", "store"
     ]
 }
