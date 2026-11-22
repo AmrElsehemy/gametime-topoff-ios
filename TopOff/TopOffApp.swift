@@ -5,6 +5,7 @@ import TopOffAnalytics
 import TopOffEngine
 import TopOffMonetization
 import TopOffPresentation
+import TopOffSave
 import GameTimeExperience
 
 @main
@@ -767,6 +768,8 @@ private final class TopOffShellModel: ObservableObject {
         self.analytics = analytics
         self.gameplay = GameplayAnalytics(pipeline: analytics)
         self.analyticsSharing = analytics.isSharingEnabled
+        // A save that could not be read was backed up rather than lost; count how often that happens.
+        if store.lastRecovery != nil { analytics.track(.saveRecovered(store: "progress")) }
 
         let ads = TopOffAds()
         self.ads = ads
